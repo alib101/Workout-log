@@ -62,6 +62,25 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 3
 .target { text-align: right; font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1.1; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .target small { display: block; font-family: var(--font-body); font-weight: 400; font-size: 12px; color: var(--muted); }
 .ref { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.meta { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.meta .ref { min-width: 0; }
+.chartbtn { flex: 0 0 auto; height: 30px; padding: 0 10px; border-radius: 15px; border: 1px solid var(--line); background: var(--field); font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.chartbtn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.chartbtn[aria-expanded="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.hintline { font-size: 14px; font-weight: 600; color: var(--done); background: var(--done-bg); border-radius: 8px; padding: 6px 10px; }
+.hintline.hold { color: var(--muted); background: var(--field); font-weight: 500; }
+.chart { background: var(--field); border: 1px solid var(--line); border-radius: 10px; padding: 8px 8px 4px; }
+.chart svg { display: block; width: 100%; height: auto; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .ax { fill: var(--muted); font-size: 10px; font-family: var(--font-body); }
+.chart .line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.chart .area { fill: var(--accent); opacity: .12; }
+.chart .dot { fill: var(--surface); stroke: var(--accent); stroke-width: 2.5; }
+.chart .dot.last { fill: var(--accent); }
+.chart .val { fill: var(--ink); font-size: 11px; font-weight: 600; font-family: var(--font-body); }
+.chart .empty { fill: var(--muted); font-size: 13px; font-family: var(--font-body); }
+.chart-cap { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); padding: 4px 2px 2px; flex-wrap: wrap; }
+.chart-cap b { color: var(--ink); font-variant-numeric: tabular-nums; }
 .grid-head, .set { display: grid; grid-template-columns: 28px 1fr 1fr 52px; gap: 8px; align-items: center; }
 .grid-head { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; }
 .setn { font-family: var(--font-display); font-weight: 700; font-size: 20px; color: var(--muted); text-align: center; }
@@ -81,6 +100,7 @@ input:focus, textarea:focus { border-color: var(--accent); outline: none; }
 /* edit mode */
 .ed { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .ed label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); min-width: 0; }
+.ed.four { grid-template-columns: repeat(4, 1fr); }
 .ed label.full { grid-column: 1 / -1; }
 .ed input { height: 44px; padding: 0 10px; }
 .ed-actions { display: flex; gap: 8px; }
@@ -105,10 +125,16 @@ input:focus, textarea:focus { border-color: var(--accent); outline: none; }
 footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); }
 .footer-in { max-width: 560px; margin-inline: auto; display: flex; flex-direction: column; gap: 8px; }
 .timer { display: flex; align-items: center; gap: 8px; background: var(--field); border: 1px solid var(--line); border-radius: 12px; padding: 6px 6px 6px 14px; }
-.timer.over { border-color: var(--accent); }
+.timer.over { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.timer.over .lbl { color: inherit; }
+.timer.over button { background: var(--surface); color: var(--ink); }
+@media (prefers-reduced-motion: no-preference) { .timer.over { animation: pulse 1s ease-in-out 4; } }
+@keyframes pulse { 50% { opacity: .55; } }
+.timer .snd { min-width: 44px; padding: 0 10px; display: grid; place-items: center; }
+.timer .snd svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .timer .lbl { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .timer .t { font-family: var(--font-display); font-weight: 700; font-size: 30px; font-variant-numeric: tabular-nums; margin-right: auto; }
-.timer.over .t { color: var(--accent); }
+.timer.over .t { color: inherit; }
 .timer button { min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; cursor: pointer; }
 .tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .tab { position: relative; min-height: 52px; border-radius: 12px; border: 0; background: transparent; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 2px 8px; min-width: 0; }
@@ -142,6 +168,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   <div class="footer-in">
     <div class="timer" id="timer" hidden>
       <span class="lbl" id="timerLbl">Rest</span><span class="t" id="timerT">0:00</span>
+      <button class="snd" id="sndBtn" type="button" aria-pressed="true" aria-label="Sound at end of rest"></button>
       <button id="plus15" type="button">+15s</button><button id="skip" type="button">Skip</button>
     </div>
     <nav class="tabs" id="tabs" role="tablist" aria-label="Session"></nav>
@@ -191,6 +218,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   // state = { plan: [...days], log: { weekIndex: { exId: [[kg, reps, done], ...] } } }
   var state = { plan: freshPlan(), log: {} };
   var view = { week: 0, day: 0, edit: false };
+  var openCharts = {};
 
   function load() {
     try {
@@ -226,6 +254,93 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     return a;
   }
   function fmt(n) { return String(Math.round(n * 100) / 100); }
+
+  function topReps(r) { var m = String(r).match(/\d+/g); return m ? +m[m.length - 1] : 0; }
+  function num(v) { var n = parseFloat(v); return isNaN(n) ? null : n; }
+  function inc(ex) { var n = parseFloat(ex.inc); return n > 0 ? n : 2.5; }
+
+  // Double progression: if every set last week reached the top of the rep range, add weight.
+  function progression(w, ex) {
+    if (w === 0 || w === DELOAD) return null;
+    var n = targetSets(w - 1, ex), p = peek(w - 1, ex.id);
+    if (!p) return null;
+    var logged = p.slice(0, n).filter(function (s) { return num(s[0]) != null && num(s[1]) != null; });
+    if (logged.length < n) return null;
+    var maxKg = Math.max.apply(null, logged.map(function (s) { return num(s[0]); }));
+    var top = topReps(ex.reps);
+    var hit = top > 0 && logged.every(function (s) { return num(s[1]) >= top; });
+    if (hit) return { up: true, kg: fmt(maxKg + inc(ex)), from: fmt(maxKg), top: top };
+    return { up: false, kg: fmt(maxKg), top: top };
+  }
+
+  // Best estimated 1-rep max (Epley) and heaviest weight per week.
+  function weekStats(id) {
+    return WEEKS.map(function (_, w) {
+      var p = peek(w, id), best = null, heavy = null;
+      (p || []).forEach(function (s) {
+        var kg = num(s[0]), r = num(s[1]);
+        if (kg == null || r == null || r <= 0) return;
+        var e = r === 1 ? kg : kg * (1 + r / 30);
+        if (best == null || e > best) best = e;
+        if (heavy == null || kg > heavy) heavy = kg;
+      });
+      return { e1rm: best, heavy: heavy };
+    });
+  }
+
+  function chartSvg(stats) {
+    var W = 320, H = 150, L = 34, R = 12, T = 18, B = 22;
+    var pts = [];
+    stats.forEach(function (s, w) { if (s.e1rm != null) pts.push({ w: w, v: s.e1rm }); });
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Estimated one-rep max by week">';
+    var xs = function (w) { return L + (W - L - R) * w / (WEEKS.length - 1); };
+    if (!pts.length) {
+      svg += '<text class="empty" x="' + W / 2 + '" y="' + H / 2 + '" text-anchor="middle">Log a set with weight and reps to start the chart</text>';
+    } else {
+      var vals = pts.map(function (p) { return p.v; });
+      var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+      var pad = Math.max(2.5, (hi - lo) * 0.2);
+      lo = Math.max(0, Math.floor((lo - pad) / 2.5) * 2.5); hi = Math.ceil((hi + pad) / 2.5) * 2.5;
+      var ys = function (v) { return T + (H - T - B) * (1 - (v - lo) / (hi - lo)); };
+      [lo, (lo + hi) / 2, hi].forEach(function (g) {
+        var y = ys(g).toFixed(1);
+        svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y + '" y2="' + y + '"/>';
+        svg += '<text class="ax" x="' + (L - 6) + '" y="' + (+y + 3) + '" text-anchor="end">' + Math.round(g) + '</text>';
+      });
+      if (pts.length > 1) {
+        var d = pts.map(function (p, i) { return (i ? "L" : "M") + xs(p.w).toFixed(1) + " " + ys(p.v).toFixed(1); }).join(" ");
+        svg += '<path class="area" d="' + d + ' L' + xs(pts[pts.length - 1].w).toFixed(1) + ' ' + (H - B) + ' L' + xs(pts[0].w).toFixed(1) + ' ' + (H - B) + ' Z"/>';
+        svg += '<path class="line" d="' + d + '"/>';
+      }
+      pts.forEach(function (p, i) {
+        var x = xs(p.w).toFixed(1), y = ys(p.v).toFixed(1), last = i === pts.length - 1;
+        svg += '<circle class="dot' + (last ? ' last' : '') + '" cx="' + x + '" cy="' + y + '" r="4"/>';
+        svg += '<text class="val" x="' + x + '" y="' + (y - 9) + '" text-anchor="middle">' + Math.round(p.v) + '</text>';
+      });
+    }
+    WEEKS.forEach(function (lab, w) {
+      svg += '<text class="ax" x="' + xs(w).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + (w === DELOAD ? "DL" : "W" + (w + 1)) + '</text>';
+    });
+    return svg + '</svg>';
+  }
+
+  function chartBlock(ex) {
+    var stats = weekStats(ex.id), box = el("div", "chart");
+    box.innerHTML = chartSvg(stats);
+    var first = null, last = null, heavy = null;
+    stats.forEach(function (s, w) {
+      if (w === DELOAD || s.e1rm == null) return;
+      if (first == null) first = s.e1rm; last = s.e1rm;
+      if (s.heavy != null && (heavy == null || s.heavy > heavy)) heavy = s.heavy;
+    });
+    var cap = el("div", "chart-cap");
+    var a = el("span"); a.appendChild(document.createTextNode("Est. 1RM (kg) "));
+    if (first != null && last !== first) { var ch = el("b", null, (last >= first ? "+" : "") + fmt(Math.round((last - first) * 10) / 10) + " kg since first week"); a.appendChild(ch); }
+    cap.appendChild(a);
+    if (heavy != null) { var h = el("span"); h.appendChild(document.createTextNode("Heaviest set ")); h.appendChild(el("b", null, fmt(heavy) + " kg")); cap.appendChild(h); }
+    box.appendChild(cap);
+    return box;
+  }
 
   function prevSet(w, id, s) {
     if (w === 0) return null;
@@ -313,7 +428,30 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     eh.appendChild(el("h3", null, ex.name));
     var tg = el("div", "target", n + " × " + ex.reps); tg.appendChild(el("small", null, "rest " + ex.rest));
     eh.appendChild(tg); card.appendChild(eh);
-    card.appendChild(el("div", "ref", refLine(w, ex.id)));
+    var meta = el("div", "meta");
+    meta.appendChild(el("div", "ref", refLine(w, ex.id)));
+    var cb = el("button", "chartbtn"); cb.type = "button";
+    cb.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M5 16l5-5 4 3 6-7"/></svg>Progress';
+    var open = !!openCharts[ex.id];
+    cb.setAttribute("aria-expanded", open ? "true" : "false");
+    meta.appendChild(cb); card.appendChild(meta);
+    var chartHost = el("div"); chartHost.hidden = !open;
+    if (open) chartHost.appendChild(chartBlock(ex));
+    cb.onclick = function () {
+      openCharts[ex.id] = !openCharts[ex.id];
+      cb.setAttribute("aria-expanded", openCharts[ex.id] ? "true" : "false");
+      chartHost.textContent = "";
+      if (openCharts[ex.id]) chartHost.appendChild(chartBlock(ex));
+      chartHost.hidden = !openCharts[ex.id];
+    };
+    card.appendChild(chartHost);
+    function refreshChart() { if (openCharts[ex.id]) { chartHost.textContent = ""; chartHost.appendChild(chartBlock(ex)); } }
+    var prog = progression(w, ex);
+    if (prog) {
+      card.appendChild(el("div", "hintline" + (prog.up ? "" : " hold"), prog.up
+        ? "Add weight: you hit " + prog.top + " reps on every set at " + prog.from + " kg. Try " + prog.kg + " kg."
+        : "Stay at " + prog.kg + " kg and aim for " + prog.top + " reps on every set."));
+    }
     var gh = el("div", "grid-head"); ["", "kg", "reps", ""].forEach(function (t) { gh.appendChild(el("span", null, t)); });
     card.appendChild(gh);
     for (var s = 0; s < n; s++) (function (s) {
@@ -321,14 +459,14 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
       row.appendChild(el("span", "setn", String(s + 1)));
       var kg = el("input"); kg.type = "text"; kg.inputMode = "decimal"; kg.autocomplete = "off";
       kg.setAttribute("aria-label", ex.name + " set " + (s + 1) + " kg");
-      kg.placeholder = pv && pv.kg !== "" ? pv.kg : "kg"; kg.value = data[s][0];
+      kg.placeholder = prog ? prog.kg : (pv && pv.kg !== "" ? pv.kg : "kg"); kg.value = data[s][0];
       var rp = el("input"); rp.type = "text"; rp.inputMode = "numeric"; rp.autocomplete = "off";
       rp.setAttribute("aria-label", ex.name + " set " + (s + 1) + " reps");
-      rp.placeholder = pv && pv.reps !== "" ? pv.reps : (lowReps(ex.reps) || "reps"); rp.value = data[s][1];
+      rp.placeholder = prog && prog.up ? (lowReps(ex.reps) || "reps") : (pv && pv.reps !== "" ? pv.reps : (lowReps(ex.reps) || "reps")); rp.value = data[s][1];
       var tk = el("button", "tick"); tk.type = "button"; tk.innerHTML = TICK;
       tk.setAttribute("aria-label", "Mark set " + (s + 1) + " done"); tk.setAttribute("aria-pressed", data[s][2] ? "true" : "false");
-      kg.oninput = function () { data[s][0] = kg.value.replace(",", ".").trim(); save(); };
-      rp.oninput = function () { data[s][1] = rp.value.trim(); save(); };
+      kg.oninput = function () { data[s][0] = kg.value.replace(",", ".").trim(); save(); refreshChart(); };
+      rp.oninput = function () { data[s][1] = rp.value.trim(); save(); refreshChart(); };
       tk.onclick = function () {
         var on = !data[s][2];
         if (on) {
@@ -337,8 +475,8 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
         }
         data[s][2] = on ? 1 : 0;
         row.classList.toggle("done", on); tk.setAttribute("aria-pressed", on ? "true" : "false");
-        save(); updateProgress();
-        if (on) startRest(restSecs(ex.rest));
+        save(); updateProgress(); refreshChart();
+        if (on) { unlockAudio(); startRest(restSecs(ex.rest)); }
       };
       row.appendChild(kg); row.appendChild(rp); row.appendChild(tk); card.appendChild(row);
     })(s);
@@ -353,7 +491,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   }
 
   function renderEdit(main, d) {
-    main.appendChild(el("div", "hint", "Changes apply to every week. Your logged sets stay with each exercise when you rename it."));
+    main.appendChild(el("div", "hint", "Changes apply to every week. Your logged sets stay with each exercise when you rename it. Add kg is how much the app suggests adding once you hit the top of the rep range on every set."));
     var dayCard = el("section", "ex"), ded = el("div", "ed");
     ded.appendChild(field("Session name", d.name, "", function (v) { d.name = v || "Day"; renderTabs(); }));
     ded.appendChild(field("Focus", d.focus, "", function (v) { d.focus = v; }));
@@ -365,11 +503,12 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     dayCard.appendChild(ded); main.appendChild(dayCard);
 
     d.ex.forEach(function (ex, i) {
-      var card = el("section", "ex"), ed = el("div", "ed");
+      var card = el("section", "ex"), ed = el("div", "ed four");
       ed.appendChild(field("Exercise", ex.name, "full", function (v) { ex.name = v; }));
       ed.appendChild(field("Sets", String(ex.sets), "", function (v) { ex.sets = parseInt(v, 10) || 1; }, "numeric"));
       ed.appendChild(field("Reps", ex.reps, "", function (v) { ex.reps = v; }));
       ed.appendChild(field("Rest", ex.rest, "", function (v) { ex.rest = v; }));
+      ed.appendChild(field("Add kg", String(inc(ex)), "", function (v) { ex.inc = parseFloat(v.replace(",", ".")) || 2.5; }, "decimal"));
       card.appendChild(ed);
       var act = el("div", "ed-actions");
       var up = el("button", null, "Move up"); up.type = "button"; up.disabled = i === 0;
@@ -389,17 +528,82 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     main.appendChild(add);
   }
 
-  // rest timer
-  var endAt = 0, tick = null;
+  // rest timer with end-of-rest alert
+  var SETTINGS_KEY = "split-log-settings", settings = { sound: true };
+  try { var st = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null"); if (st) settings.sound = st.sound !== false; } catch (e) {}
+  var actx = null, wake = null, endAt = 0, tick = null, warned = false;
+
+  // iOS only allows sound after a tap, so the audio is unlocked when a set is ticked.
+  function unlockAudio() {
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+    } catch (e) {}
+  }
+  function tone(at, freq, len, vol) {
+    var o = actx.createOscillator(), g = actx.createGain();
+    o.type = "sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(vol, at + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + len);
+    o.connect(g); g.connect(actx.destination); o.start(at); o.stop(at + len + 0.02);
+  }
+  function beep(final) {
+    if (!settings.sound || !actx) return;
+    try {
+      var t = actx.currentTime + 0.02;
+      if (final) { tone(t, 880, 0.18, 0.5); tone(t + 0.25, 880, 0.18, 0.5); tone(t + 0.5, 1320, 0.35, 0.5); }
+      else tone(t, 660, 0.12, 0.3);
+    } catch (e) {}
+  }
+  function keepAwake() {
+    if (wake || !("wakeLock" in navigator)) return;
+    navigator.wakeLock.request("screen").then(function (l) { wake = l; l.addEventListener("release", function () { wake = null; }); }).catch(function () {});
+  }
+  function letSleep() { if (wake) { wake.release().catch(function () {}); wake = null; } }
+
   function paint() {
     var left = endAt - Date.now(), s = Math.max(0, Math.ceil(left / 1000));
     $("timerT").textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+    if (!warned && left <= 10000 && left > 0) { warned = true; beep(false); }
     var over = left <= 0; $("timer").classList.toggle("over", over); $("timerLbl").textContent = over ? "Go" : "Rest";
-    if (over && tick) { clearInterval(tick); tick = null; if (navigator.vibrate) navigator.vibrate(300); }
+    if (over && tick) {
+      clearInterval(tick); tick = null; beep(true);
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      setTimeout(letSleep, 60000);
+    }
   }
-  function startRest(sec) { endAt = Date.now() + sec * 1000; $("timer").hidden = false; if (tick) clearInterval(tick); tick = setInterval(paint, 250); paint(); }
-  $("plus15").onclick = function () { endAt = Math.max(endAt, Date.now()) + 15000; if (!tick) tick = setInterval(paint, 250); paint(); };
-  $("skip").onclick = function () { if (tick) clearInterval(tick); tick = null; $("timer").hidden = true; };
+  function startRest(sec) {
+    endAt = Date.now() + sec * 1000; warned = sec <= 10; $("timer").hidden = false;
+    if (tick) clearInterval(tick); tick = setInterval(paint, 250); paint(); keepAwake();
+  }
+  $("plus15").onclick = function () {
+    unlockAudio(); endAt = Math.max(endAt, Date.now()) + 15000;
+    if (endAt - Date.now() > 10000) warned = false;
+    if (!tick) tick = setInterval(paint, 250); paint(); keepAwake();
+  };
+  $("skip").onclick = function () { if (tick) clearInterval(tick); tick = null; $("timer").hidden = true; letSleep(); };
+  function paintSound() {
+    var b = $("sndBtn");
+    b.setAttribute("aria-pressed", settings.sound ? "true" : "false");
+    b.innerHTML = settings.sound
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M16 9l6 6M22 9l-6 6"/></svg>';
+  }
+  $("sndBtn").onclick = function () {
+    settings.sound = !settings.sound; paintSound(); unlockAudio();
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {}
+    if (settings.sound) beep(false);
+  };
+  paintSound();
+  // Coming back to the app mid-rest: catch the timer up and re-take the wake lock.
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && !$("timer").hidden) {
+      if (tick || endAt > Date.now()) keepAwake();
+      if (actx && actx.state === "suspended") actx.resume().catch(function () {});
+      paint();
+    }
+  });
 
   // backup menu
   var msg = $("menuMsg");
