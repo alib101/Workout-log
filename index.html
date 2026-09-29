@@ -109,6 +109,17 @@ input:focus, textarea:focus { border-color: var(--accent); outline: none; }
 .ed-actions .del.confirm { background: var(--danger); color: var(--surface); border-color: var(--danger); }
 .add { height: 52px; border-radius: 14px; border: 2px dashed var(--line); background: transparent; font-weight: 600; color: var(--muted); cursor: pointer; }
 .hint { font-size: 13px; color: var(--muted); }
+.exnote { font-size: 13px; color: var(--ink); background: var(--field); border-left: 3px solid var(--accent); border-radius: 4px; padding: 6px 10px; }
+.planbanner { background: var(--surface); border: 2px solid var(--accent); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.planbanner p { margin: 0; font-size: 14px; color: var(--muted); }
+.planbanner .row button.confirm { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.pain { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.painrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.painrow label { font-size: 14px; font-weight: 600; }
+.painrow input { width: 72px; height: 40px; text-align: center; font-family: var(--font-display); font-weight: 700; font-size: 20px; }
+.paintip { font-size: 13px; color: var(--muted); }
+.paintip.mid { color: var(--ink); }
+.paintip.high { color: var(--danger); font-weight: 600; }
 
 /* menu sheet */
 .sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
@@ -138,7 +149,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
 .timer button { min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; cursor: pointer; }
 .tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .tab { position: relative; min-height: 52px; border-radius: 12px; border: 0; background: transparent; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 2px 8px; min-width: 0; }
-.tab .n { white-space: nowrap; font-family: var(--font-display); font-weight: 700; font-size: 15px; text-transform: uppercase; line-height: 1; }
+.tab .n { white-space: nowrap; font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0 !important; text-transform: uppercase; line-height: 1; }
 .tab .d { font-size: 11px; color: var(--muted); line-height: 1; }
 .tab .bar { position: absolute; left: 12px; right: 12px; bottom: 5px; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .tab .bar i { display: block; height: 100%; width: 0; background: var(--done); }
@@ -178,30 +189,53 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
 <script>
 (function () {
   "use strict";
+  // [name, sets, reps, rest, add-kg step, form note]. Built around a recovering lower back:
+  // no loaded twisting or bending forward, supported positions, core work that resists movement.
+  var PLAN_VERSION = 2;
   var DEFAULT_PLAN = [
     { key: "push", name: "Push", day: 1, focus: "Chest, shoulders, triceps", ex: [
-      ["Barbell bench press", 4, "5-8", "2-3 min"], ["Incline dumbbell press", 3, "8-10", "2 min"],
-      ["Seated dumbbell shoulder press", 3, "8-10", "2 min"], ["Cable lateral raise", 4, "12-15", "60-90s"],
-      ["Pec deck / cable fly", 3, "12-15", "60-90s"], ["Triceps rope pushdown", 3, "10-12", "60-90s"],
-      ["Overhead cable triceps extension", 3, "10-12", "60-90s"] ] },
+      ["Chest press", 3, "8-10", "2 min", 2.5, ""],
+      ["Incline bench press machine", 3, "8-10", "2 min", 2.5, ""],
+      ["Cable fly", 3, "12-15", "60-90s", 2.5, ""],
+      ["Seated DB shoulder press", 3, "8-10", "2 min", 2, "Backrest upright, back on the pad. Take DBs from the rack, not the floor."],
+      ["Cable raise 2 handles", 3, "12-15", "60s", 2.5, ""],
+      ["X-cable triceps extensions", 3, "10-12", "60-90s", 2.5, ""],
+      ["Overhead tri rope 1 arm", 3, "10-12", "60s", 2.5, "Seated or kneeling, ribs down. Don't arch your lower back."],
+      ["Dead bug", 3, "8 /side", "60s", 0, "Replaces the ab bench. Keep your lower back pressed into the floor. Slow."] ] },
     { key: "pull", name: "Pull", day: 2, focus: "Back, rear delts, biceps", ex: [
-      ["Weighted pull-up / lat pulldown", 4, "6-10", "2-3 min"], ["Chest-supported row", 4, "8-10", "2 min"],
-      ["Seated cable row (neutral grip)", 3, "10-12", "90s"], ["Face pull / rear delt fly", 3, "15-20", "60s"],
-      ["Incline dumbbell curl", 3, "10-12", "60-90s"], ["Hammer curl", 3, "10-12", "60-90s"] ] },
-    { key: "lowerA", name: "Lower A", day: 3, focus: "Quad-focused legs", ex: [
-      ["Back squat", 4, "5-8", "2-3 min"], ["Leg press", 3, "10-12", "2 min"],
-      ["Romanian deadlift", 3, "8-10", "2 min"], ["Leg extension", 3, "12-15", "60-90s"],
-      ["Seated leg curl", 3, "10-12", "60-90s"], ["Standing calf raise", 4, "10-15", "60s"] ] },
-    { key: "upper", name: "Upper", day: 5, focus: "Full upper body, balanced", ex: [
-      ["Barbell overhead press", 3, "6-8", "2-3 min"], ["T-bar / barbell row", 3, "8-10", "2 min"],
-      ["Flat dumbbell bench press", 3, "8-10", "2 min"], ["Neutral-grip lat pulldown", 3, "10-12", "90s"],
-      ["Dumbbell lateral raise", 3, "15-20", "60s"], ["EZ-bar curl", 2, "10-12", "60-90s"],
-      ["Skullcrusher", 2, "10-12", "60-90s"] ] },
-    { key: "lowerB", name: "Lower B", day: 6, focus: "Posterior-chain-focused legs", ex: [
-      ["Deadlift (or trap-bar)", 3, "4-6", "3 min"], ["Hack squat / front squat", 3, "8-10", "2 min"],
-      ["Barbell hip thrust", 3, "8-12", "2 min"], ["Bulgarian split squat", 3, "8-10 /leg", "90s"],
-      ["Lying leg curl", 3, "10-12", "60-90s"], ["Seated calf raise", 4, "12-15", "60s"],
-      ["Cable crunch", 3, "12-15", "60s"] ] }
+      ["Chest-supported row machine", 4, "8-10", "2 min", 2.5, "Replaces rack pulls for now. Chest stays on the pad."],
+      ["Low row (V-bar or 2 handles)", 3, "10-12", "90s", 2.5, "Was 1-handle. Two hands avoids twisting. Sit tall, don't rock."],
+      ["Wide arm pull down", 3, "8-12", "90s", 2.5, ""],
+      ["Rope back narrow machine", 3, "10-12", "90s", 2.5, ""],
+      ["Upright row", 3, "12-15", "60s", 2.5, "Stop at chest height if your shoulders pinch."],
+      ["Machine rear delt fly", 3, "12-15", "60s", 2.5, ""],
+      ["Curl machine", 3, "10-12", "60s", 2.5, "Machine rather than standing DBs while your back settles."],
+      ["Cable rope hammer curls", 3, "10-12", "60s", 2.5, "Soft knees, brace, no swinging."] ] },
+    { key: "lowerA", name: "Lower A", day: 3, focus: "Quads, back-friendly", ex: [
+      ["Hack squat (or leg press)", 4, "8-10", "2-3 min", 5, "Replaces barbell squat. Leave 2-3 reps in reserve. Stop before your hips tuck under."],
+      ["Leg press", 3, "10-12", "2 min", 5, "Stop before your lower back lifts off the pad."],
+      ["Leg extensions", 3, "12-15", "60-90s", 2.5, ""],
+      ["Lying leg curl", 3, "10-12", "60-90s", 2.5, ""],
+      ["Split lunges (DBs)", 3, "8-10 /leg", "90s", 2, "Upright torso. Pick DBs up from the rack, not the floor."],
+      ["Seated calf raise", 4, "12-15", "60s", 2.5, ""],
+      ["Side plank", 3, "30-45s /side", "60s", 0, "Replaces hanging abs. Straight line from head to heels."] ] },
+    { key: "upper", name: "Upper", day: 5, focus: "Chest, back, arms", ex: [
+      ["DB incline press", 3, "8-10", "2 min", 2, "Rest the DBs on your knees while seated, then kick them up. No bending down."],
+      ["Machine bench press", 3, "8-10", "2 min", 2.5, ""],
+      ["Sit down row narrow", 3, "10-12", "90s", 2.5, "Sit tall. Don't lean back to finish the rep."],
+      ["Lat pull down curvy bar", 3, "10-12", "90s", 2.5, ""],
+      ["Lateral raise", 3, "12-15", "60s", 1, ""],
+      ["Cable curl bar", 3, "10-12", "60s", 2.5, ""],
+      ["Overhead tri 1 arm (seated)", 3, "10-12", "60s", 2.5, "Seated, ribs down."],
+      ["Pallof press", 3, "10 /side", "60s", 2.5, "Anti-twist: resist the cable pulling you round. Start light."] ] },
+    { key: "lowerB", name: "Lower B", day: 6, focus: "Hips and glutes, back-friendly", ex: [
+      ["Hip thrust machine / glute bridge", 4, "8-12", "2 min", 5, "Ribs down, squeeze at the top. Don't arch your back."],
+      ["Leg press (feet high)", 3, "10-12", "2 min", 5, "Stop before your lower back lifts off the pad."],
+      ["Seated leg curl", 3, "10-12", "60-90s", 2.5, ""],
+      ["Bulgarian split squat", 3, "8-10 /leg", "90s", 2, "Upright torso. DBs from the rack or use the Smith machine."],
+      ["Leg extensions", 3, "12-15", "60-90s", 2.5, ""],
+      ["Calf press on leg press", 4, "12-15", "60s", 5, "Keeps weight off your spine, unlike standing calf raises."],
+      ["Bird dog", 3, "8 /side", "60s", 0, "Slow, hips level, hold 2 seconds at full reach."] ] }
   ];
   var WEEKS = ["Wk 1", "Wk 2", "Wk 3", "Wk 4", "Wk 5", "Wk 6", "Deload"];
   var DELOAD = 6, DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -211,19 +245,19 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   function freshPlan() {
     return DEFAULT_PLAN.map(function (d) {
       return { key: d.key, name: d.name, day: d.day, focus: d.focus,
-        ex: d.ex.map(function (e, i) { return { id: d.key + i, name: e[0], sets: e[1], reps: e[2], rest: e[3] }; }) };
+        ex: d.ex.map(function (e, i) { return { id: "v" + PLAN_VERSION + d.key + i, name: e[0], sets: e[1], reps: e[2], rest: e[3], inc: e[4] || 2.5, note: e[5] || "" }; }) };
     });
   }
 
   // state = { plan: [...days], log: { weekIndex: { exId: [[kg, reps, done], ...] } } }
-  var state = { plan: freshPlan(), log: {} };
+  var state = { plan: freshPlan(), log: {}, pain: {}, planVersion: PLAN_VERSION };
   var view = { week: 0, day: 0, edit: false };
   var openCharts = {};
 
   function load() {
     try {
       var s = JSON.parse(localStorage.getItem(KEY) || "null");
-      if (s && Array.isArray(s.plan) && s.plan.length === 5 && s.log) state = s;
+      if (s && Array.isArray(s.plan) && s.plan.length === 5 && s.log) { state = s; if (!state.pain) state.pain = {}; }
     } catch (e) {}
     try {
       var v = JSON.parse(localStorage.getItem(VIEW_KEY) || "null");
@@ -403,6 +437,47 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     });
   }
 
+  function planBanner() {
+    var b = el("section", "planbanner");
+    b.appendChild(el("strong", null, "Your back-friendly plan is ready"));
+    b.appendChild(el("p", null, "Loading it replaces the exercise list on this phone with your adapted split. Sets you've already logged won't show against the new exercises."));
+    var row = el("div", "row");
+    var go = el("button", "primary", "Load new plan"); go.type = "button";
+    go.onclick = function () {
+      if (!go.classList.contains("confirm")) { go.classList.add("confirm"); go.textContent = "Tap again to load"; return; }
+      state.plan = freshPlan(); state.planVersion = PLAN_VERSION; save(); renderTabs(); renderMain();
+    };
+    var keep = el("button", null, "Keep my current list"); keep.type = "button";
+    keep.onclick = function () { state.planVersion = PLAN_VERSION; save(); renderMain(); };
+    row.appendChild(go); row.appendChild(keep); b.appendChild(row);
+    return b;
+  }
+
+  function painRow(w, d) {
+    var box = el("div", "pain"), W = state.pain[w] || {};
+    var lb = el("label", null, "Back pain after this session"); lb.htmlFor = "pain-in";
+    var i = el("input"); i.id = "pain-in"; i.type = "text"; i.inputMode = "numeric"; i.placeholder = "0-10"; i.autocomplete = "off";
+    i.value = W[d.key] != null ? W[d.key] : "";
+    var tip = el("div", "paintip");
+    function paintTip() {
+      var v = num(i.value);
+      tip.textContent = v == null ? "Up to about 3/10 during a set is usually fine. If it's worse tomorrow morning, drop the weight or skip that exercise next time."
+        : v <= 3 ? "Fine to carry on as planned."
+        : v <= 5 ? "Hold weights steady next session and check how it feels in the morning."
+        : "Higher than you'd want. Go lighter next session, drop anything that set it off, and get it checked if it keeps up.";
+      tip.className = "paintip" + (v != null && v > 5 ? " high" : v != null && v > 3 ? " mid" : "");
+    }
+    i.oninput = function () {
+      var v = i.value.replace(/[^\d]/g, "").slice(0, 2); if (v !== "" && +v > 10) v = "10"; i.value = v;
+      var P = state.pain[w] || (state.pain[w] = {});
+      if (v === "") delete P[d.key]; else P[d.key] = +v;
+      save(); paintTip();
+    };
+    var top = el("div", "painrow"); top.appendChild(lb); top.appendChild(i);
+    box.appendChild(top); box.appendChild(tip); paintTip();
+    return box;
+  }
+
   function renderMain() {
     var main = $("main"); main.textContent = "";
     var d = state.plan[view.day], w = view.week;
@@ -416,9 +491,11 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     if (!view.edit) { var c = el("div", "count"); c.id = "count"; r.appendChild(c); }
     head.appendChild(r); main.appendChild(head);
 
+    if (state.planVersion !== PLAN_VERSION) main.appendChild(planBanner());
     if (view.edit) { renderEdit(main, d); return; }
     if (w === DELOAD) main.appendChild(el("div", "banner", "Deload week: about 60% of Wk 6 weight and half the sets. Grey numbers are suggestions."));
     d.ex.forEach(function (ex) { main.appendChild(exCard(ex, w)); });
+    main.appendChild(painRow(w, d));
     updateProgress();
   }
 
@@ -428,6 +505,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     eh.appendChild(el("h3", null, ex.name));
     var tg = el("div", "target", n + " × " + ex.reps); tg.appendChild(el("small", null, "rest " + ex.rest));
     eh.appendChild(tg); card.appendChild(eh);
+    if (ex.note) card.appendChild(el("div", "exnote", ex.note));
     var meta = el("div", "meta");
     meta.appendChild(el("div", "ref", refLine(w, ex.id)));
     var cb = el("button", "chartbtn"); cb.type = "button";
@@ -509,6 +587,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
       ed.appendChild(field("Reps", ex.reps, "", function (v) { ex.reps = v; }));
       ed.appendChild(field("Rest", ex.rest, "", function (v) { ex.rest = v; }));
       ed.appendChild(field("Add kg", String(inc(ex)), "", function (v) { ex.inc = parseFloat(v.replace(",", ".")) || 2.5; }, "decimal"));
+      ed.appendChild(field("Form note", ex.note || "", "full", function (v) { ex.note = v; }));
       card.appendChild(ed);
       var act = el("div", "ed-actions");
       var up = el("button", null, "Move up"); up.type = "button"; up.disabled = i === 0;
