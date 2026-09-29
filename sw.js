@@ -1,5 +1,5 @@
 // Offline cache. Bump VERSION (and APP_VERSION in index.html) on every change so phones pick up the new copy.
-var VERSION = "split-log-v7";
+var VERSION = "split-log-v8";
 var FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function (e) {
