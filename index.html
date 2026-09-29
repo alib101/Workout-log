@@ -81,6 +81,10 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 3
 .chart .empty { fill: var(--muted); font-size: 13px; font-family: var(--font-body); }
 .chart-cap { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); padding: 4px 2px 2px; flex-wrap: wrap; }
 .chart-cap b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.chart-about { font-size: 12px; color: var(--muted); padding: 0 2px 4px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 3px; margin-bottom: 6px; }
+.seg button { height: 30px; border: 0; border-radius: 6px; background: transparent; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .grid-head, .set { display: grid; grid-template-columns: 28px 1fr 1fr 52px; gap: 8px; align-items: center; }
 .grid-head { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; }
 .setn { font-family: var(--font-display); font-weight: 700; font-size: 20px; color: var(--muted); text-align: center; }
@@ -212,7 +216,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   "use strict";
   // [name, sets, reps, rest, add-kg step, form note]. Built around a recovering lower back:
   // no loaded twisting or bending forward, supported positions, core work that resists movement.
-  var APP_VERSION = "5";
+  var APP_VERSION = "6";
   var PLAN_VERSION = 2;
   var DEFAULT_PLAN = [
     { key: "push", name: "Push", day: 1, focus: "Chest, shoulders, triceps", ex: [
@@ -329,39 +333,52 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     return { up: false, kg: fmt(maxKg), top: top };
   }
 
-  // Best estimated 1-rep max (Epley) and heaviest weight per week.
+  // Per-week figures for the progress chart.
+  var MODES = {
+    top: { label: "Top weight", unit: "kg", about: "The heaviest weight you lifted each week." },
+    e1rm: { label: "Est. 1RM", unit: "kg", about: "An estimate of the most you could lift for one rep, from your best set: weight × (1 + reps ÷ 30). It's always higher than the weight you actually lifted." },
+    vol: { label: "Volume", unit: "kg", about: "Total weight moved: weight × reps, added up across every set." }
+  };
+  var chartMode = "top";
+  try { var cm = localStorage.getItem("split-log-chartmode"); if (MODES[cm]) chartMode = cm; } catch (e) {}
+
   function weekStats(id) {
     return WEEKS.map(function (_, w) {
-      var p = peek(w, id), best = null, heavy = null;
+      var p = peek(w, id), out = { top: null, topReps: null, e1rm: null, vol: null };
       (p || []).forEach(function (s) {
         var kg = num(s[0]), r = num(s[1]);
         if (kg == null || r == null || r <= 0) return;
         var e = r === 1 ? kg : kg * (1 + r / 30);
-        if (best == null || e > best) best = e;
-        if (heavy == null || kg > heavy) heavy = kg;
+        if (out.e1rm == null || e > out.e1rm) out.e1rm = e;
+        if (out.top == null || kg > out.top || (kg === out.top && r > out.topReps)) { out.top = kg; out.topReps = r; }
+        out.vol = (out.vol || 0) + kg * r;
       });
-      return { e1rm: best, heavy: heavy };
+      return out;
     });
   }
+  function niceLabel(v) { return v >= 1000 ? Math.round(v).toLocaleString() : fmt(Math.round(v * 2) / 2); }
 
-  function chartSvg(stats) {
-    var W = 320, H = 150, L = 34, R = 12, T = 18, B = 22;
+  function chartSvg(stats, key) {
+    var W = 320, H = 150, L = 38, R = 14, T = 18, B = 22;
     var pts = [];
-    stats.forEach(function (s, w) { if (s.e1rm != null) pts.push({ w: w, v: s.e1rm }); });
-    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Estimated one-rep max by week">';
+    stats.forEach(function (s, w) { if (s[key] != null) pts.push({ w: w, v: s[key] }); });
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + MODES[key].label + ' by week">';
     var xs = function (w) { return L + (W - L - R) * w / (WEEKS.length - 1); };
     if (!pts.length) {
       svg += '<text class="empty" x="' + W / 2 + '" y="' + H / 2 + '" text-anchor="middle">Log a set with weight and reps to start the chart</text>';
     } else {
       var vals = pts.map(function (p) { return p.v; });
       var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
-      var pad = Math.max(2.5, (hi - lo) * 0.2);
-      lo = Math.max(0, Math.floor((lo - pad) / 2.5) * 2.5); hi = Math.ceil((hi + pad) / 2.5) * 2.5;
+      var range = hi - lo || Math.max(hi * 0.1, 1);
+      lo = Math.max(0, lo - range * 0.25); hi = hi + range * 0.25;
+      var u = Math.pow(10, Math.floor(Math.log10(hi - lo)));
+      if ((hi - lo) / u < 3) u /= 2;
+      lo = Math.floor(lo / u) * u; hi = Math.ceil(hi / u) * u; if (hi === lo) hi = lo + u;
       var ys = function (v) { return T + (H - T - B) * (1 - (v - lo) / (hi - lo)); };
       [lo, (lo + hi) / 2, hi].forEach(function (g) {
         var y = ys(g).toFixed(1);
         svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y + '" y2="' + y + '"/>';
-        svg += '<text class="ax" x="' + (L - 6) + '" y="' + (+y + 3) + '" text-anchor="end">' + Math.round(g) + '</text>';
+        svg += '<text class="ax" x="' + (L - 6) + '" y="' + (+y + 3) + '" text-anchor="end">' + niceLabel(g) + '</text>';
       });
       if (pts.length > 1) {
         var d = pts.map(function (p, i) { return (i ? "L" : "M") + xs(p.w).toFixed(1) + " " + ys(p.v).toFixed(1); }).join(" ");
@@ -371,7 +388,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
       pts.forEach(function (p, i) {
         var x = xs(p.w).toFixed(1), y = ys(p.v).toFixed(1), last = i === pts.length - 1;
         svg += '<circle class="dot' + (last ? ' last' : '') + '" cx="' + x + '" cy="' + y + '" r="4"/>';
-        svg += '<text class="val" x="' + x + '" y="' + (y - 9) + '" text-anchor="middle">' + Math.round(p.v) + '</text>';
+        svg += '<text class="val" x="' + x + '" y="' + (y - 9) + '" text-anchor="middle">' + niceLabel(p.v) + '</text>';
       });
     }
     WEEKS.forEach(function (lab, w) {
@@ -382,19 +399,33 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
 
   function chartBlock(ex) {
     var stats = weekStats(ex.id), box = el("div", "chart");
-    box.innerHTML = chartSvg(stats);
-    var first = null, last = null, heavy = null;
+    var seg = el("div", "seg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", "What the chart shows");
+    Object.keys(MODES).forEach(function (k) {
+      var b = el("button", null, MODES[k].label); b.type = "button";
+      b.setAttribute("aria-pressed", k === chartMode ? "true" : "false");
+      b.onclick = function () {
+        chartMode = k; try { localStorage.setItem("split-log-chartmode", k); } catch (e) {}
+        box.replaceWith(chartBlock(ex));
+      };
+      seg.appendChild(b);
+    });
+    box.appendChild(seg);
+    var pic = el("div"); pic.innerHTML = chartSvg(stats, chartMode); box.appendChild(pic);
+
+    var first = null, last = null, bestTop = null;
     stats.forEach(function (s, w) {
-      if (w === DELOAD || s.e1rm == null) return;
-      if (first == null) first = s.e1rm; last = s.e1rm;
-      if (s.heavy != null && (heavy == null || s.heavy > heavy)) heavy = s.heavy;
+      if (s.top != null && (bestTop == null || s.top > bestTop.top || (s.top === bestTop.top && s.topReps > bestTop.topReps))) bestTop = s;
+      if (w === DELOAD || s[chartMode] == null) return;
+      if (first == null) first = s[chartMode]; last = s[chartMode];
     });
     var cap = el("div", "chart-cap");
-    var a = el("span"); a.appendChild(document.createTextNode("Est. 1RM (kg) "));
-    if (first != null && last !== first) { var ch = el("b", null, (last >= first ? "+" : "") + fmt(Math.round((last - first) * 10) / 10) + " kg since first week"); a.appendChild(ch); }
-    cap.appendChild(a);
-    if (heavy != null) { var h = el("span"); h.appendChild(document.createTextNode("Heaviest set ")); h.appendChild(el("b", null, fmt(heavy) + " kg")); cap.appendChild(h); }
+    if (bestTop) { var h = el("span"); h.appendChild(document.createTextNode("Best set ")); h.appendChild(el("b", null, fmt(bestTop.top) + " kg × " + fmt(bestTop.topReps))); cap.appendChild(h); }
+    if (first != null && last !== first) {
+      var a = el("span"); a.appendChild(document.createTextNode("Since first week "));
+      a.appendChild(el("b", null, (last >= first ? "+" : "−") + niceLabel(Math.abs(last - first)) + " kg")); cap.appendChild(a);
+    }
     box.appendChild(cap);
+    box.appendChild(el("div", "chart-about", MODES[chartMode].about));
     return box;
   }
 
