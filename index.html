@@ -132,6 +132,14 @@ input:focus, textarea:focus { border-color: var(--accent); outline: none; }
 .row button.danger { color: var(--danger); }
 .row button.danger.confirm { background: var(--danger); color: var(--surface); border-color: var(--danger); }
 .msg { font-size: 14px; color: var(--done); min-height: 1.2em; }
+.sheet p.small { font-size: 13px; }
+.sheet p b { color: var(--ink); }
+.confirmbox { border: 2px solid var(--accent); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.confirmbox p { color: var(--ink); }
+.sheet details { border-top: 1px solid var(--line); padding-top: 10px; }
+.sheet summary { font-size: 14px; font-weight: 600; cursor: pointer; color: var(--muted); }
+.sheet .more { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.due { color: var(--danger); }
 
 footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); }
 .footer-in { max-width: 560px; margin-inline: auto; display: flex; flex-direction: column; gap: 8px; }
@@ -160,15 +168,27 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><h1>Five-Day Split</h1><button class="iconbtn" id="menuBtn" type="button" aria-expanded="false">Backup</button></div>
+  <div class="top"><h1>Five-Day Split</h1><button class="iconbtn" id="menuBtn" type="button" aria-expanded="false">Backup<span class="due" id="dueDot" hidden> due</span></button></div>
 
   <section class="sheet" id="menu" hidden>
     <h3>Backup and restore</h3>
-    <p>Your log is stored on this phone only. Copy a backup now and then and paste it into Notes, so you can restore it if you clear Safari data or change phone.</p>
-    <div class="row"><button class="primary" id="copyBtn" type="button">Copy backup</button><button id="shareBtn" type="button" hidden>Share backup</button></div>
-    <textarea id="restoreTxt" placeholder="Paste a backup here to restore it" aria-label="Backup text to restore"></textarea>
-    <div class="row"><button id="restoreBtn" type="button">Restore from pasted text</button><button class="danger" id="resetBtn" type="button">Clear all logged sets</button></div>
+    <p id="lastBackup">Your log is stored on this phone only.</p>
+    <div class="row"><button class="primary" id="saveFileBtn" type="button">Save backup file</button><button id="openFileBtn" type="button">Restore from file</button></div>
+    <p class="small">Save backup opens the share sheet. Choose <b>Save to Files</b>, then pick a folder such as iCloud Drive. Restore lets you pick that file again.</p>
+    <input type="file" id="restoreFile" accept=".json,application/json,text/plain" hidden>
+    <div class="confirmbox" id="confirmBox" hidden>
+      <p id="confirmTxt"></p>
+      <div class="row"><button class="primary" id="confirmRestore" type="button">Replace with this backup</button><button id="cancelRestore" type="button">Cancel</button></div>
+    </div>
     <div class="msg" id="menuMsg" role="status"></div>
+    <details>
+      <summary>More options</summary>
+      <div class="more">
+        <div class="row"><button id="copyBtn" type="button">Copy backup as text</button></div>
+        <textarea id="restoreTxt" placeholder="Paste a text backup here to restore it" aria-label="Backup text to restore"></textarea>
+        <div class="row"><button id="restoreBtn" type="button">Restore from pasted text</button><button class="danger" id="resetBtn" type="button">Clear all logged sets</button></div>
+      </div>
+    </details>
   </section>
 
   <div class="weeks" id="weeks" role="group" aria-label="Week"></div>
@@ -685,38 +705,96 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   });
 
   // backup menu
-  var msg = $("menuMsg");
+  var msg = $("menuMsg"), LAST_KEY = "split-log-lastbackup", pendingRestore = null;
+  function lastBackup() { try { return +localStorage.getItem(LAST_KEY) || 0; } catch (e) { return 0; } }
+  function setLastBackup() { try { localStorage.setItem(LAST_KEY, String(Date.now())); } catch (e) {} paintBackup(); }
+  function loggedCount(st) {
+    var n = 0;
+    Object.keys(st.log || {}).forEach(function (w) { Object.keys(st.log[w] || {}).forEach(function (id) {
+      (st.log[w][id] || []).forEach(function (x) { if (x && (x[2] || x[0] !== "" || x[1] !== "")) n++; });
+    }); });
+    return n;
+  }
+  function paintBackup() {
+    var t = lastBackup(), days = t ? Math.floor((Date.now() - t) / 864e5) : null;
+    $("lastBackup").textContent = t
+      ? "Last backup: " + (days === 0 ? "today" : days === 1 ? "yesterday" : days + " days ago") + ". Your log is stored on this phone only."
+      : "No backup saved yet. Your log is stored on this phone only.";
+    $("dueDot").hidden = !(loggedCount(state) > 0 && (days == null || days >= 7));
+  }
+  function stamp() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
   $("menuBtn").onclick = function () {
-    var m = $("menu"); m.hidden = !m.hidden; this.setAttribute("aria-expanded", String(!m.hidden)); msg.textContent = "";
+    var m = $("menu"); m.hidden = !m.hidden; this.setAttribute("aria-expanded", String(!m.hidden)); msg.textContent = ""; paintBackup();
   };
+  $("saveFileBtn").onclick = function () {
+    var name = "split-log-backup-" + stamp() + ".json";
+    var body = JSON.stringify({ app: "five-day-split", savedAt: new Date().toISOString(), data: state });
+    var file = null;
+    try { file = new File([body], name, { type: "application/json" }); } catch (e) {}
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file] }).then(function () {
+        setLastBackup(); msg.textContent = "Backup shared as " + name + ". If you chose Save to Files, it's in the folder you picked.";
+      }, function (err) {
+        msg.textContent = err && err.name === "AbortError" ? "No backup saved. Tap Save backup file and choose Save to Files." : "Couldn't open the share sheet. Try again, or use Copy backup as text under More options.";
+      });
+      return;
+    }
+    try {
+      var url = URL.createObjectURL(new Blob([body], { type: "application/json" }));
+      var a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+      setLastBackup(); msg.textContent = "Backup downloaded as " + name + ". On iPhone it goes to Downloads in the Files app.";
+    } catch (e) { msg.textContent = "This browser can't save files. Use Copy backup as text under More options."; }
+  };
+  function parseBackup(text) {
+    var j = JSON.parse(text), st = j && j.data ? j.data : j;
+    if (!st || !Array.isArray(st.plan) || st.plan.length !== 5 || !st.log) throw 0;
+    if (!st.pain) st.pain = {};
+    return { state: st, savedAt: j && j.savedAt ? new Date(j.savedAt) : null };
+  }
+  function askRestore(b) {
+    pendingRestore = b.state;
+    var when = b.savedAt && !isNaN(b.savedAt) ? "saved " + b.savedAt.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "with no date";
+    $("confirmTxt").textContent = "Backup " + when + ", with " + (function (n) { return n === 1 ? "1 set" : n + " sets"; })(loggedCount(b.state)) + " logged. Restoring replaces everything on this phone, including your exercise list.";
+    $("confirmBox").hidden = false; msg.textContent = "";
+  }
+  $("openFileBtn").onclick = function () { $("restoreFile").value = ""; $("restoreFile").click(); };
+  $("restoreFile").onchange = function () {
+    var f = this.files && this.files[0]; if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      try { askRestore(parseBackup(String(r.result))); }
+      catch (e) { $("confirmBox").hidden = true; msg.textContent = "That file isn't a backup from this app. Pick a file named split-log-backup-….json."; }
+    };
+    r.onerror = function () { msg.textContent = "Couldn't read that file. Try picking it again."; };
+    r.readAsText(f);
+  };
+  $("confirmRestore").onclick = function () {
+    if (!pendingRestore) return;
+    state = pendingRestore; pendingRestore = null; save();
+    $("confirmBox").hidden = true; renderTabs(); renderMain(); paintBackup();
+    msg.textContent = "Backup restored.";
+  };
+  $("cancelRestore").onclick = function () { pendingRestore = null; $("confirmBox").hidden = true; msg.textContent = "Nothing changed."; };
   $("copyBtn").onclick = function () {
     var txt = JSON.stringify(state);
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(txt).then(function () { msg.textContent = "Backup copied. Paste it into Notes."; },
+      navigator.clipboard.writeText(txt).then(function () { setLastBackup(); msg.textContent = "Backup copied. Paste it into Notes."; },
         function () { $("restoreTxt").value = txt; $("restoreTxt").select(); msg.textContent = "Select all in the box and copy it."; });
     } else { $("restoreTxt").value = txt; $("restoreTxt").select(); msg.textContent = "Select all in the box and copy it."; }
   };
-  if (navigator.share) {
-    $("shareBtn").hidden = false;
-    $("shareBtn").onclick = function () {
-      navigator.share({ title: "Split log backup", text: JSON.stringify(state) }).catch(function () {});
-    };
-  }
   $("restoreBtn").onclick = function () {
-    try {
-      var s = JSON.parse($("restoreTxt").value);
-      if (!s || !Array.isArray(s.plan) || !s.log) throw 0;
-      state = s; save(); $("restoreTxt").value = ""; renderTabs(); renderMain(); msg.textContent = "Backup restored.";
-    } catch (e) { msg.textContent = "That text isn't a backup from this app. Paste the whole backup and try again."; }
+    try { askRestore(parseBackup($("restoreTxt").value)); $("restoreTxt").value = ""; }
+    catch (e) { msg.textContent = "That text isn't a backup from this app. Paste the whole backup and try again."; }
   };
   $("resetBtn").onclick = function () {
     var b = this;
     if (!b.classList.contains("confirm")) { b.classList.add("confirm"); b.textContent = "Tap again to clear sets"; return; }
     state.log = {}; save(); b.classList.remove("confirm"); b.textContent = "Clear all logged sets";
-    renderMain(); msg.textContent = "Logged sets cleared. Your exercises are kept.";
+    renderMain(); paintBackup(); msg.textContent = "Logged sets cleared. Your exercises are kept.";
   };
 
-  load(); renderWeeks(); renderTabs(); renderMain();
+  load(); renderWeeks(); renderTabs(); renderMain(); paintBackup();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
 })();
