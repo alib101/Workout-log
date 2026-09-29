@@ -138,7 +138,26 @@ input::placeholder { color: var(--muted); opacity: .55; }
 input:focus, textarea:focus { border-color: var(--accent); outline: none; }
 .tick { height: 48px; border-radius: 10px; border: 1px solid var(--line); background: var(--field); cursor: pointer; display: grid; place-items: center; }
 .tick svg { width: 24px; height: 24px; stroke: var(--muted); fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-.set.done input { background: var(--done-bg); border-color: var(--done); }
+.stp { display: grid; grid-template-columns: 26px minmax(0, 1fr) 26px; align-items: center; height: 48px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); min-width: 0; }
+.stp input { border: 0 !important; background: transparent !important; height: 46px !important; padding: 0; font-size: 20px !important; box-shadow: none !important; }
+.stp:focus-within { border-color: var(--accent); }
+.nudge { height: 46px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 20px; font-weight: 600; cursor: pointer; touch-action: manipulation; }
+.nudge:active { color: var(--accent); }
+.set.done .stp { background: var(--done-bg); border-color: var(--done); }
+.set.timed, .grid-head.timed { grid-template-columns: 28px 1fr 52px 52px; }
+.holdbtn { height: 48px; border-radius: 10px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; display: grid; place-items: center; }
+.holdbtn svg { width: 22px; height: 22px; fill: currentColor; }
+.timer.holding { border-color: var(--done); background: var(--done-bg); }
+.timer.holding .t { color: var(--done); }
+.hbtns { display: flex; gap: 6px; }
+.fnav { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.fmid { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.fpos { font-weight: 600; font-size: 15px; }
+.fdots { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.fdot { width: 12px; height: 12px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: var(--field); cursor: pointer; }
+.fdot.done { background: var(--done); border-color: var(--done); }
+.fdot.cur { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nextup { font-size: 14px; color: var(--muted); text-align: center; }
 .set.done .tick { background: var(--done); border-color: var(--done); }
 .set.done .tick svg { stroke: var(--surface); }
 
@@ -267,7 +286,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   "use strict";
   // [name, sets, reps, rest, add-kg step, form note]. Built around a recovering lower back:
   // no loaded twisting or bending forward, supported positions, core work that resists movement.
-  var APP_VERSION = "9";
+  var APP_VERSION = "10";
   var PLAN_VERSION = 2;
   var DEFAULT_PLAN = [
     { key: "push", name: "Push", day: 1, focus: "Chest, shoulders, triceps", ex: [
@@ -328,7 +347,8 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
 
   // state = { plan: [...days], log: { weekIndex: { exId: [[kg, reps, done], ...] } } }
   var state = { plan: freshPlan(), log: {}, pain: {}, sessions: {}, days: {}, planVersion: PLAN_VERSION };
-  var view = { week: 0, day: 0, edit: false, section: "train", pweek: null };
+  var view = { week: 0, day: 0, edit: false, section: "train", pweek: null, focus: false, fi: null, fiKey: null };
+  try { view.focus = localStorage.getItem("split-log-focus") === "1"; } catch (e) {}
   try { if (localStorage.getItem("split-log-section") === "progress") view.section = "progress"; } catch (e) {}
   var openCharts = {};
 
@@ -526,6 +546,49 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     return key || state.plan[view.day].key;
   }
 
+  function holdRef(w, ex) {
+    if (w === 0) return "First week: hold as long as your form stays solid. Tap \u25B6 to time it.";
+    var bits = (peek(w - 1, ex.id) || []).filter(function (x) { return x[1] !== ""; }).map(function (x) { return x[1] + "s"; });
+    return bits.length ? WEEKS[w - 1] + ": " + bits.join("  ") : "Nothing logged for " + WEEKS[w - 1] + ".";
+  }
+  // Exercises measured in seconds, e.g. "30-45s /side".
+  function isTimed(ex) { return /\d\s*s\b/i.test(String(ex.reps)); }
+
+  // Number box with - and + either side. Starts from the grey suggestion if the box is empty.
+  function stepper(input, step, min, what) {
+    var wrap = el("div", "stp");
+    function nudge(dir) {
+      var v = num(input.value); if (v == null) v = num(input.placeholder); if (v == null) v = 0;
+      v = Math.max(min, Math.round((v + dir * step) * 100) / 100);
+      input.value = fmt(v); input.oninput();
+    }
+    var m = el("button", "nudge", "\u2212"); m.type = "button"; m.setAttribute("aria-label", "Less " + what);
+    var pl = el("button", "nudge", "+"); pl.type = "button"; pl.setAttribute("aria-label", "More " + what);
+    m.onclick = function () { nudge(-1); }; pl.onclick = function () { nudge(1); };
+    wrap.appendChild(m); wrap.appendChild(input); wrap.appendChild(pl);
+    return wrap;
+  }
+
+  // Focus mode: after the last set of an exercise is ticked, move on to the next one.
+  function afterSetDone(ex, w) {
+    if (!view.focus) return;
+    var n = setCount(w, ex), p = peek(w, ex.id) || [];
+    for (var i = 0; i < n; i++) if (!p[i] || !p[i][2]) return;
+    var list = state.plan[view.day].ex, idx = list.indexOf(ex);
+    if (idx < 0) return;
+    setTimeout(function () {
+      if (!view.focus || view.fi !== idx) return;
+      view.fi = idx + 1; renderMain(); window.scrollTo(0, 0);
+    }, 900);
+  }
+  function firstUnfinished(w, list) {
+    for (var i = 0; i < list.length; i++) {
+      var n = setCount(w, list[i]), p = peek(w, list[i].id) || [];
+      for (var k = 0; k < n; k++) if (!p[k] || !p[k][2]) return i;
+    }
+    return list.length;
+  }
+
   function prevSet(w, id, s) {
     if (w === 0) return null;
     var p = peek(w - 1, id);
@@ -583,7 +646,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
       var isNext = !nx.finished && nx.w === view.week && nx.di === di, done = sessionDone(view.week, di);
       b.appendChild(el("span", "d" + (isNext ? " next" : ""), isNext ? (done ? "Now" : "Next") : done ? "Done" : ""));
       var bar = el("span", "bar"); bar.appendChild(el("i")); b.appendChild(bar);
-      b.onclick = function () { view.day = di; saveView(); renderTabs(); renderMain(); window.scrollTo(0, 0); };
+      b.onclick = function () { view.day = di; view.fi = null; saveView(); renderTabs(); renderMain(); window.scrollTo(0, 0); };
       box.appendChild(b);
     });
   }
@@ -809,10 +872,21 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     var head = el("div", "dayhead");
     var l = el("div"); l.appendChild(el("h2", null, d.name)); l.appendChild(el("div", "focus", d.focus)); head.appendChild(l);
     var r = el("div", "dayright");
-    var eb = el("button", "editbtn", view.edit ? "Done editing" : "Edit exercises"); eb.type = "button";
+    var eb = el("button", "editbtn", view.edit ? "Done editing" : "Edit"); eb.type = "button";
     eb.setAttribute("aria-pressed", view.edit ? "true" : "false");
     eb.onclick = function () { view.edit = !view.edit; renderMain(); };
-    r.appendChild(eb);
+    var btns = el("div", "hbtns");
+    if (!view.edit) {
+      var fb = el("button", "editbtn", "Focus"); fb.type = "button";
+      fb.setAttribute("aria-pressed", view.focus ? "true" : "false");
+      fb.onclick = function () {
+        view.focus = !view.focus; view.fi = null;
+        try { localStorage.setItem("split-log-focus", view.focus ? "1" : ""); } catch (e) {}
+        renderMain(); window.scrollTo(0, 0);
+      };
+      btns.appendChild(fb);
+    }
+    btns.appendChild(eb); r.appendChild(btns);
     if (!view.edit) { var c = el("div", "count"); c.id = "count"; r.appendChild(c); }
     head.appendChild(r); main.appendChild(head);
 
@@ -827,6 +901,38 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
       main.appendChild(jump);
     }
     if (w === DELOAD) main.appendChild(el("div", "banner", "Deload week: about 60% of Wk 6 weight and half the sets. Grey numbers are suggestions."));
+    if (view.focus && d.ex.length) {
+      var key = w + "|" + view.day;
+      if (view.fiKey !== key || view.fi == null) { view.fiKey = key; view.fi = firstUnfinished(w, d.ex); }
+      var N = d.ex.length, fi = Math.max(0, Math.min(view.fi, N));
+      view.fi = fi;
+      var nav = el("div", "fnav");
+      var pb = el("button", "wbtn", "\u2039"); pb.type = "button"; pb.disabled = fi === 0; pb.setAttribute("aria-label", "Previous exercise");
+      var nb = el("button", "wbtn", "\u203A"); nb.type = "button"; nb.disabled = fi >= N; nb.setAttribute("aria-label", "Next exercise");
+      pb.onclick = function () { view.fi = fi - 1; renderMain(); window.scrollTo(0, 0); };
+      nb.onclick = function () { view.fi = fi + 1; renderMain(); window.scrollTo(0, 0); };
+      var dots = el("div", "fdots");
+      d.ex.forEach(function (ex, i) {
+        var n = setCount(w, ex), p = peek(w, ex.id) || [], done = true;
+        for (var k = 0; k < n; k++) if (!p[k] || !p[k][2]) done = false;
+        var dot = el("button", "fdot" + (i === fi ? " cur" : "") + (done ? " done" : "")); dot.type = "button";
+        dot.setAttribute("aria-label", "Go to " + ex.name);
+        dot.onclick = function () { view.fi = i; renderMain(); window.scrollTo(0, 0); };
+        dots.appendChild(dot);
+      });
+      var mid = el("div", "fmid"); mid.appendChild(el("span", "fpos", fi < N ? "Exercise " + (fi + 1) + " of " + N : "Finish")); mid.appendChild(dots);
+      nav.appendChild(pb); nav.appendChild(mid); nav.appendChild(nb);
+      main.appendChild(nav);
+      if (fi < N) {
+        main.appendChild(exCard(d.ex[fi], w));
+        main.appendChild(el("div", "nextup", fi + 1 < N ? "Next: " + d.ex[fi + 1].name : "Last exercise. Then rate your back."));
+      } else {
+        main.appendChild(el("div", "banner", "Session done. Rate your back below, then take a break."));
+        main.appendChild(painRow(w, d));
+      }
+      updateProgress();
+      return;
+    }
     d.ex.forEach(function (ex) { main.appendChild(exCard(ex, w)); });
     main.appendChild(painRow(w, d));
     updateProgress();
@@ -840,12 +946,13 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     eh.appendChild(tg); card.appendChild(eh);
     if (ex.note) card.appendChild(el("div", "exnote", ex.note));
     var meta = el("div", "meta");
-    meta.appendChild(el("div", "ref", refLine(w, ex.id)));
+    meta.appendChild(el("div", "ref", isTimed(ex) ? holdRef(w, ex) : refLine(w, ex.id)));
     var cb = el("button", "chartbtn"); cb.type = "button";
     cb.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M5 16l5-5 4 3 6-7"/></svg>Progress';
     var open = !!openCharts[ex.id];
     cb.setAttribute("aria-expanded", open ? "true" : "false");
-    meta.appendChild(cb); card.appendChild(meta);
+    if (!isTimed(ex)) meta.appendChild(cb);
+    card.appendChild(meta);
     var chartHost = el("div"); chartHost.hidden = !open;
     if (open) chartHost.appendChild(chartBlock(ex));
     cb.onclick = function () {
@@ -883,10 +990,11 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
       };
       card.appendChild(rb);
     }
-    var gh = el("div", "grid-head"); ["", "kg", "reps", ""].forEach(function (t) { gh.appendChild(el("span", null, t)); });
+    var timed = isTimed(ex);
+    var gh = el("div", "grid-head" + (timed ? " timed" : "")); (timed ? ["", "seconds", "hold", ""] : ["", "kg", "reps", ""]).forEach(function (t) { gh.appendChild(el("span", null, t)); });
     card.appendChild(gh);
     for (var s = 0; s < n; s++) (function (s) {
-      var row = el("div", "set" + (data[s][2] ? " done" : "")), pv = prevSet(w, ex.id, s);
+      var row = el("div", "set" + (timed ? " timed" : "") + (data[s][2] ? " done" : "")), pv = prevSet(w, ex.id, s);
       row.appendChild(el("span", "setn", String(s + 1)));
       var kg = el("input"); kg.type = "text"; kg.inputMode = "decimal"; kg.autocomplete = "off";
       kg.setAttribute("aria-label", ex.name + " set " + (s + 1) + " kg");
@@ -898,8 +1006,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
       tk.setAttribute("aria-label", "Mark set " + (s + 1) + " done"); tk.setAttribute("aria-pressed", data[s][2] ? "true" : "false");
       kg.oninput = function () { data[s][0] = kg.value.replace(",", ".").trim(); save(); refreshChart(); };
       rp.oninput = function () { data[s][1] = rp.value.trim(); save(); refreshChart(); };
-      tk.onclick = function () {
-        var on = !data[s][2];
+      function markDone(on) {
         if (on) {
           if (!kg.value && !isNaN(parseFloat(kg.placeholder))) { kg.value = kg.placeholder; data[s][0] = kg.value; }
           if (!rp.value && !isNaN(parseFloat(rp.placeholder))) { rp.value = rp.placeholder; data[s][1] = rp.value; }
@@ -913,9 +1020,25 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
         }
         row.classList.toggle("done", on); tk.setAttribute("aria-pressed", on ? "true" : "false");
         save(); updateProgress(); refreshChart();
-        if (on) { unlockAudio(); startRest(restSecs(ex.rest)); }
-      };
-      row.appendChild(kg); row.appendChild(rp); row.appendChild(tk); card.appendChild(row);
+        if (on) { unlockAudio(); startRest(restSecs(ex.rest)); afterSetDone(ex, w); }
+      }
+      tk.onclick = function () { markDone(!data[s][2]); };
+      if (timed) {
+        var hb = el("button", "holdbtn"); hb.type = "button";
+        hb.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+        hb.setAttribute("aria-label", "Start hold timer for set " + (s + 1));
+        hb.onclick = function () {
+          var secs = num(rp.value) || num(rp.placeholder) || 30, sides = /side/i.test(ex.reps);
+          if (!rp.value) { rp.value = fmt(secs); data[s][1] = rp.value; save(); }
+          var phases = [{ label: "Get ready", secs: 5 }, { label: sides ? "Hold: first side" : "Hold", secs: secs }];
+          if (sides) phases.push({ label: "Switch sides", secs: 5 }, { label: "Hold: second side", secs: secs });
+          startHold(phases, function () { if (!data[s][2]) markDone(true); });
+        };
+        row.appendChild(stepper(rp, 5, 5, "seconds")); row.appendChild(hb);
+      } else {
+        row.appendChild(stepper(kg, inc(ex), 0, "kg")); row.appendChild(stepper(rp, 1, 0, "reps"));
+      }
+      row.appendChild(tk); card.appendChild(row);
     })(s);
 
     // Add or remove a set for this session only.
@@ -1026,9 +1149,23 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   }
   function letSleep() { if (wake) { wake.release().catch(function () {}); wake = null; } }
 
+  var hold = null; // { phases: [{label, secs}], i, onDone, count }
   function paint() {
     var left = endAt - Date.now(), s = Math.max(0, Math.ceil(left / 1000));
     $("timerT").textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+    if (hold) {
+      $("timer").classList.remove("over"); $("timer").classList.add("holding");
+      $("timerLbl").textContent = hold.phases[hold.i].label;
+      if (left > 0 && left <= 3000 && hold.count !== s) { hold.count = s; beep(false); }
+      if (left <= 0) {
+        hold.i++; hold.count = null;
+        if (hold.i < hold.phases.length) { endAt = Date.now() + hold.phases[hold.i].secs * 1000; paint(); return; }
+        var done = hold.onDone; hold = null; $("timer").classList.remove("holding");
+        clearInterval(tick); tick = null; beep(true);
+        if (done) done();
+      }
+      return;
+    }
     if (!warned && left <= 10000 && left > 0) { warned = true; beep(false); }
     var over = left <= 0; $("timer").classList.toggle("over", over); $("timerLbl").textContent = over ? "Go" : "Rest";
     if (over && tick) {
@@ -1037,7 +1174,13 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
       setTimeout(letSleep, 60000);
     }
   }
+  function startHold(phases, onDone) {
+    unlockAudio(); hold = { phases: phases, i: 0, onDone: onDone, count: null };
+    endAt = Date.now() + phases[0].secs * 1000; $("timer").hidden = false;
+    if (tick) clearInterval(tick); tick = setInterval(paint, 250); paint(); keepAwake();
+  }
   function startRest(sec) {
+    hold = null; $("timer").classList.remove("holding");
     endAt = Date.now() + sec * 1000; warned = sec <= 10; $("timer").hidden = false;
     if (tick) clearInterval(tick); tick = setInterval(paint, 250); paint(); keepAwake();
   }
@@ -1046,7 +1189,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     if (endAt - Date.now() > 10000) warned = false;
     if (!tick) tick = setInterval(paint, 250); paint(); keepAwake();
   };
-  $("skip").onclick = function () { if (tick) clearInterval(tick); tick = null; $("timer").hidden = true; letSleep(); };
+  $("skip").onclick = function () { hold = null; $("timer").classList.remove("holding"); if (tick) clearInterval(tick); tick = null; $("timer").hidden = true; letSleep(); };
   function paintSound() {
     var b = $("sndBtn");
     b.setAttribute("aria-pressed", settings.sound ? "true" : "false");
