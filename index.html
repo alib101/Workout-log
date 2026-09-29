@@ -155,6 +155,10 @@ input:focus, textarea:focus { border-color: var(--accent); outline: none; }
 .add { height: 52px; border-radius: 14px; border: 2px dashed var(--line); background: transparent; font-weight: 600; color: var(--muted); cursor: pointer; }
 .hint { font-size: 13px; color: var(--muted); }
 .repeatbtn { height: 38px; border-radius: 10px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-weight: 600; font-size: 14px; cursor: pointer; }
+.setadj { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.adjbtn { height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--field); font-weight: 600; font-size: 15px; cursor: pointer; }
+.adjbtn:disabled { opacity: .4; cursor: default; }
+.adjbtn.confirm { background: var(--danger); border-color: var(--danger); color: var(--surface); }
 .repeatbtn:disabled { border-color: var(--line); color: var(--muted); cursor: default; }
 .jump { align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); font-weight: 600; font-size: 14px; cursor: pointer; }
 .tab .d.next { font-weight: 700; color: var(--accent); }
@@ -263,7 +267,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   "use strict";
   // [name, sets, reps, rest, add-kg step, form note]. Built around a recovering lower back:
   // no loaded twisting or bending forward, supported positions, core work that resists movement.
-  var APP_VERSION = "8";
+  var APP_VERSION = "9";
   var PLAN_VERSION = 2;
   var DEFAULT_PLAN = [
     { key: "push", name: "Push", day: 1, focus: "Chest, shoulders, triceps", ex: [
@@ -369,6 +373,11 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function $(id) { return document.getElementById(id); }
 
+  // Sets shown for this exercise in this week: the plan's number unless changed on the fly with + / -.
+  function setCount(w, ex) {
+    var o = state.setCounts && state.setCounts[w + "|" + ex.id];
+    return o > 0 ? o : targetSets(w, ex);
+  }
   function targetSets(w, ex) { var n = Math.max(1, parseInt(ex.sets, 10) || 3); return w === DELOAD ? Math.ceil(n / 2) : n; }
   function lowReps(r) { var m = String(r).match(/\d+/); return m ? m[0] : ""; }
   function restSecs(r) {
@@ -393,7 +402,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   // Double progression: if every set last week reached the top of the rep range, add weight.
   function progression(w, ex) {
     if (w === 0 || w === DELOAD) return null;
-    var n = targetSets(w - 1, ex), p = peek(w - 1, ex.id);
+    var n = setCount(w - 1, ex), p = peek(w - 1, ex.id);
     if (!p) return null;
     var logged = p.slice(0, n).filter(function (s) { return num(s[0]) != null && num(s[1]) != null; });
     if (logged.length < n) return null;
@@ -539,7 +548,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   function totals(w, di) {
     var total = 0, done = 0;
     state.plan[di].ex.forEach(function (ex) {
-      var n = targetSets(w, ex); total += n;
+      var n = setCount(w, ex); total += n;
       var p = peek(w, ex.id);
       if (p) for (var s = 0; s < n && s < p.length; s++) if (p[s][2]) done++;
     });
@@ -643,7 +652,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     state.plan.forEach(function (d) {
       var any = false;
       d.ex.forEach(function (ex) {
-        var n = targetSets(w, ex), p = peek(w, ex.id), m = muscleOf(ex.name);
+        var n = setCount(w, ex), p = peek(w, ex.id), m = muscleOf(ex.name);
         (p || []).slice(0, n).forEach(function (x) {
           if (!counted(x)) return;
           any = true; t.sets++;
@@ -824,10 +833,10 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   }
 
   function exCard(ex, w) {
-    var n = targetSets(w, ex), data = sets(w, ex.id, n);
+    var n = setCount(w, ex), data = sets(w, ex.id, n), planned = targetSets(w, ex);
     var card = el("section", "ex"), eh = el("div", "ex-head");
     eh.appendChild(el("h3", null, ex.name));
-    var tg = el("div", "target", n + " × " + ex.reps); tg.appendChild(el("small", null, "rest " + ex.rest));
+    var tg = el("div", "target", n + " × " + ex.reps); tg.appendChild(el("small", null, (n !== planned ? "planned " + planned + " \u00B7 " : "") + "rest " + ex.rest));
     eh.appendChild(tg); card.appendChild(eh);
     if (ex.note) card.appendChild(el("div", "exnote", ex.note));
     var meta = el("div", "meta");
@@ -908,6 +917,32 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
       };
       row.appendChild(kg); row.appendChild(rp); row.appendChild(tk); card.appendChild(row);
     })(s);
+
+    // Add or remove a set for this session only.
+    var adj = el("div", "setadj");
+    var minus = el("button", "adjbtn", "\u2212 Set"); minus.type = "button"; minus.disabled = n <= 1;
+    minus.setAttribute("aria-label", "Remove last set of " + ex.name);
+    var plus = el("button", "adjbtn", "+ Set"); plus.type = "button"; plus.disabled = n >= 12;
+    plus.setAttribute("aria-label", "Add a set to " + ex.name);
+    function setN(v) {
+      if (!state.setCounts) state.setCounts = {};
+      var k = w + "|" + ex.id;
+      if (v === planned) delete state.setCounts[k]; else state.setCounts[k] = v;
+      if (data.length > v) data.length = v;
+      save(); card.replaceWith(exCard(ex, w)); updateProgress();
+    }
+    plus.onclick = function () { setN(n + 1); };
+    minus.onclick = function () {
+      var lastSet = data[n - 1], hasData = lastSet && (lastSet[0] !== "" || lastSet[1] !== "" || lastSet[2]);
+      if (hasData && !minus.classList.contains("confirm")) {
+        minus.classList.add("confirm"); minus.textContent = "Remove set " + n + "?";
+        setTimeout(function () { if (minus.isConnected) { minus.classList.remove("confirm"); minus.textContent = "\u2212 Set"; } }, 3000);
+        return;
+      }
+      setN(n - 1);
+    };
+    adj.appendChild(minus); adj.appendChild(plus);
+    card.appendChild(adj);
     return card;
   }
 
