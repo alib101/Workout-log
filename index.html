@@ -181,6 +181,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
       <div class="row"><button class="primary" id="confirmRestore" type="button">Replace with this backup</button><button id="cancelRestore" type="button">Cancel</button></div>
     </div>
     <div class="msg" id="menuMsg" role="status"></div>
+    <p class="small">App version <b id="appVer"></b></p>
     <details>
       <summary>More options</summary>
       <div class="more">
@@ -211,6 +212,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   "use strict";
   // [name, sets, reps, rest, add-kg step, form note]. Built around a recovering lower back:
   // no loaded twisting or bending forward, supported positions, core work that resists movement.
+  var APP_VERSION = "5";
   var PLAN_VERSION = 2;
   var DEFAULT_PLAN = [
     { key: "push", name: "Push", day: 1, focus: "Chest, shoulders, triceps", ex: [
@@ -794,9 +796,20 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     renderMain(); paintBackup(); msg.textContent = "Logged sets cleared. Your exercises are kept.";
   };
 
+  $("appVer").textContent = APP_VERSION;
   load(); renderWeeks(); renderTabs(); renderMain(); paintBackup();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
+  // Check for a newer version on every open and reload once when one is installed.
+  if ("serviceWorker" in navigator) {
+    var hadController = !!navigator.serviceWorker.controller, reloaded = false;
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(function (reg) {
+      reg.update().catch(function () {});
+      document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") reg.update().catch(function () {}); });
+    }).catch(function () {});
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (hadController && !reloaded) { reloaded = true; location.reload(); }
+    });
+  }
 })();
 </script>
 </body>
