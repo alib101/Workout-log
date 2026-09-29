@@ -113,6 +113,11 @@ input:focus, textarea:focus { border-color: var(--accent); outline: none; }
 .ed-actions .del.confirm { background: var(--danger); color: var(--surface); border-color: var(--danger); }
 .add { height: 52px; border-radius: 14px; border: 2px dashed var(--line); background: transparent; font-weight: 600; color: var(--muted); cursor: pointer; }
 .hint { font-size: 13px; color: var(--muted); }
+.repeatbtn { height: 38px; border-radius: 10px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-weight: 600; font-size: 14px; cursor: pointer; }
+.repeatbtn:disabled { border-color: var(--line); color: var(--muted); cursor: default; }
+.jump { align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); font-weight: 600; font-size: 14px; cursor: pointer; }
+.tab .d.next { font-weight: 700; color: var(--accent); }
+.tab[aria-selected="true"] .d.next { color: inherit; }
 .exnote { font-size: 13px; color: var(--ink); background: var(--field); border-left: 3px solid var(--accent); border-radius: 4px; padding: 6px 10px; }
 .planbanner { background: var(--surface); border: 2px solid var(--accent); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
 .planbanner p { margin: 0; font-size: 14px; color: var(--muted); }
@@ -216,7 +221,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   "use strict";
   // [name, sets, reps, rest, add-kg step, form note]. Built around a recovering lower back:
   // no loaded twisting or bending forward, supported positions, core work that resists movement.
-  var APP_VERSION = "6";
+  var APP_VERSION = "7";
   var PLAN_VERSION = 2;
   var DEFAULT_PLAN = [
     { key: "push", name: "Push", day: 1, focus: "Chest, shoulders, triceps", ex: [
@@ -276,7 +281,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   }
 
   // state = { plan: [...days], log: { weekIndex: { exId: [[kg, reps, done], ...] } } }
-  var state = { plan: freshPlan(), log: {}, pain: {}, planVersion: PLAN_VERSION };
+  var state = { plan: freshPlan(), log: {}, pain: {}, sessions: {}, planVersion: PLAN_VERSION };
   var view = { week: 0, day: 0, edit: false };
   var openCharts = {};
 
@@ -285,12 +290,34 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
       var s = JSON.parse(localStorage.getItem(KEY) || "null");
       if (s && Array.isArray(s.plan) && s.plan.length === 5 && s.log) { state = s; if (!state.pain) state.pain = {}; }
     } catch (e) {}
-    try {
-      var v = JSON.parse(localStorage.getItem(VIEW_KEY) || "null");
-      if (v && v.week >= 0 && v.week < WEEKS.length && v.day >= 0 && v.day < 5) { view.week = v.week; view.day = v.day; return; }
-    } catch (e) {}
-    var today = new Date().getDay();
-    state.plan.forEach(function (d, i) { if (d.day === today) view.day = i; });
+    if (!state.sessions) state.sessions = {};
+    var nx = upNext(); view.week = nx.w; view.day = nx.di;
+  }
+
+  // Flexible days: sessions run in order (Push, Pull, Lower A, Upper, Lower B), whatever the weekday.
+  // Up next = the session after the last one you trained, or the one you're in the middle of (ticked within 4 hours).
+  function sessionDone(w, di) {
+    return state.plan[di].ex.some(function (ex) { var p = peek(w, ex.id); return p && p.some(function (x) { return x[2]; }); });
+  }
+  function lastTrained() {
+    var best = null;
+    Object.keys(state.sessions || {}).forEach(function (k) {
+      var parts = k.split("|"), w = +parts[0], di = -1;
+      state.plan.forEach(function (d, i) { if (d.key === parts[1]) di = i; });
+      if (di < 0 || !(w >= 0)) return;
+      if (!best || state.sessions[k] > best.ts) best = { w: w, di: di, ts: state.sessions[k] };
+    });
+    if (best) return best;
+    for (var w = WEEKS.length - 1; w >= 0; w--) for (var di = 4; di >= 0; di--) if (sessionDone(w, di)) return { w: w, di: di, ts: 0 };
+    return null;
+  }
+  function upNext() {
+    var lt = lastTrained();
+    if (!lt) return { w: 0, di: 0 };
+    if (lt.ts && Date.now() - lt.ts < 4 * 3600e3) return { w: lt.w, di: lt.di };
+    var idx = lt.w * 5 + lt.di + 1;
+    if (idx >= WEEKS.length * 5) return { w: WEEKS.length - 1, di: 4, finished: true };
+    return { w: Math.floor(idx / 5), di: idx % 5 };
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
   function saveView() { try { localStorage.setItem(VIEW_KEY, JSON.stringify({ week: view.week, day: view.day })); } catch (e) {} }
@@ -429,6 +456,23 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     return box;
   }
 
+  // Most recent earlier week where this exercise has any numbers logged.
+  function lastLogged(w, id) {
+    for (var k = w - 1; k >= 0; k--) {
+      var p = peek(k, id);
+      if (p) {
+        var filled = p.filter(function (x) { return x[0] !== "" || x[1] !== ""; });
+        if (filled.length) return { w: k, sets: p, lastFilled: filled[filled.length - 1] };
+      }
+    }
+    return null;
+  }
+  function dayKeyOf(ex) {
+    var key = null;
+    state.plan.forEach(function (d) { d.ex.forEach(function (e) { if (e === ex) key = d.key; }); });
+    return key || state.plan[view.day].key;
+  }
+
   function prevSet(w, id, s) {
     if (w === 0) return null;
     var p = peek(w - 1, id);
@@ -473,17 +517,18 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     WEEKS.forEach(function (label, w) {
       var b = el("button", "chip", label); b.type = "button";
       b.setAttribute("aria-pressed", w === view.week ? "true" : "false");
-      b.onclick = function () { view.week = w; saveView(); renderWeeks(); renderMain(); };
+      b.onclick = function () { view.week = w; saveView(); renderWeeks(); renderTabs(); renderMain(); };
       box.appendChild(b);
     });
   }
   function renderTabs() {
-    var box = $("tabs"), today = new Date().getDay(); box.textContent = "";
+    var box = $("tabs"), nx = upNext(); box.textContent = "";
     state.plan.forEach(function (d, di) {
       var b = el("button", "tab"); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.i = di;
       b.setAttribute("aria-selected", di === view.day ? "true" : "false");
       b.appendChild(el("span", "n", d.name));
-      b.appendChild(el("span", "d", d.day === today ? "Today" : DAYS[d.day]));
+      var isNext = !nx.finished && nx.w === view.week && nx.di === di, done = sessionDone(view.week, di);
+      b.appendChild(el("span", "d" + (isNext ? " next" : ""), isNext ? (done ? "Now" : "Next") : done ? "Done" : ""));
       var bar = el("span", "bar"); bar.appendChild(el("i")); b.appendChild(bar);
       b.onclick = function () { view.day = di; saveView(); renderTabs(); renderMain(); window.scrollTo(0, 0); };
       box.appendChild(b);
@@ -546,6 +591,14 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
 
     if (state.planVersion !== PLAN_VERSION) main.appendChild(planBanner());
     if (view.edit) { renderEdit(main, d); return; }
+    var nx = upNext();
+    if (nx.finished && w === nx.w && view.day === nx.di) {
+      main.appendChild(el("div", "banner", "Block finished. Well done. Clear your logged sets under Backup > More options to start a new block, after saving a backup."));
+    } else if (!nx.finished && (nx.w !== w || nx.di !== view.day)) {
+      var jump = el("button", "jump", "Up next: " + state.plan[nx.di].name + ", " + WEEKS[nx.w] + " \u2192"); jump.type = "button";
+      jump.onclick = function () { view.week = nx.w; view.day = nx.di; renderWeeks(); renderTabs(); renderMain(); window.scrollTo(0, 0); };
+      main.appendChild(jump);
+    }
     if (w === DELOAD) main.appendChild(el("div", "banner", "Deload week: about 60% of Wk 6 weight and half the sets. Grey numbers are suggestions."));
     d.ex.forEach(function (ex) { main.appendChild(exCard(ex, w)); });
     main.appendChild(painRow(w, d));
@@ -583,6 +636,26 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
         ? "Add weight: you hit " + prog.top + " reps on every set at " + prog.from + " kg. Try " + prog.kg + " kg."
         : "Stay at " + prog.kg + " kg and aim for " + prog.top + " reps on every set."));
     }
+    var last = lastLogged(w, ex.id);
+    if (last) {
+      var empty = data.slice(0, n).some(function (x) { return x[0] === "" && x[1] === ""; });
+      var rb = el("button", "repeatbtn", "Same as last time (" + WEEKS[last.w] + (w === DELOAD ? ", at 60%" : "") + ")"); rb.type = "button";
+      rb.disabled = !empty;
+      if (!empty) rb.textContent = "All sets filled";
+      rb.onclick = function () {
+        for (var i = 0; i < n; i++) {
+          var src = last.sets[i] && (last.sets[i][0] !== "" || last.sets[i][1] !== "") ? last.sets[i] : last.lastFilled;
+          if (!src) continue;
+          if (data[i][0] === "" && src[0] !== "") {
+            var k = num(src[0]);
+            data[i][0] = w === DELOAD && k != null ? fmt(Math.round(k * 0.6 / 2.5) * 2.5) : src[0];
+          }
+          if (data[i][1] === "" && src[1] !== "") data[i][1] = src[1];
+        }
+        save(); card.replaceWith(exCard(ex, w));
+      };
+      card.appendChild(rb);
+    }
     var gh = el("div", "grid-head"); ["", "kg", "reps", ""].forEach(function (t) { gh.appendChild(el("span", null, t)); });
     card.appendChild(gh);
     for (var s = 0; s < n; s++) (function (s) {
@@ -605,6 +678,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
           if (!rp.value && !isNaN(parseFloat(rp.placeholder))) { rp.value = rp.placeholder; data[s][1] = rp.value; }
         }
         data[s][2] = on ? 1 : 0;
+        if (on) { state.sessions[w + "|" + dayKeyOf(ex)] = Date.now(); renderTabs(); }
         row.classList.toggle("done", on); tk.setAttribute("aria-pressed", on ? "true" : "false");
         save(); updateProgress(); refreshChart();
         if (on) { unlockAudio(); startRest(restSecs(ex.rest)); }
@@ -783,6 +857,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     var j = JSON.parse(text), st = j && j.data ? j.data : j;
     if (!st || !Array.isArray(st.plan) || st.plan.length !== 5 || !st.log) throw 0;
     if (!st.pain) st.pain = {};
+    if (!st.sessions) st.sessions = {};
     return { state: st, savedAt: j && j.savedAt ? new Date(j.savedAt) : null };
   }
   function askRestore(b) {
