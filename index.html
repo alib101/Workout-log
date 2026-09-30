@@ -178,6 +178,16 @@ input:focus, textarea:focus { border-color: var(--accent); outline: none; }
 .adjbtn { height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--field); font-weight: 600; font-size: 15px; cursor: pointer; }
 .adjbtn:disabled { opacity: .4; cursor: default; }
 .adjbtn.confirm { background: var(--danger); border-color: var(--danger); color: var(--surface); }
+.tools { display: flex; gap: 6px; flex: 0 0 auto; }
+.notesbtn.has { border-color: var(--accent); color: var(--accent); }
+.notesbtn[aria-expanded="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.setupnote { display: flex; gap: 8px; align-items: baseline; width: 100%; text-align: left; background: var(--field); border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 14px; }
+.setupico { flex: 0 0 auto; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.setuptxt { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.setupbox { display: flex; flex-direction: column; gap: 8px; background: var(--field); border: 1px solid var(--accent); border-radius: 10px; padding: 10px; }
+.setuplab { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.setupbox textarea { min-height: 76px; padding: 8px 10px; background: var(--surface); resize: vertical; line-height: 1.4; }
+.setupdone { align-self: flex-end; height: 36px; padding: 0 16px; border-radius: 10px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
 .repeatbtn:disabled { border-color: var(--line); color: var(--muted); cursor: default; }
 .jump { align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); font-weight: 600; font-size: 14px; cursor: pointer; }
 .tab .d.next { font-weight: 700; color: var(--accent); }
@@ -286,7 +296,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   "use strict";
   // [name, sets, reps, rest, add-kg step, form note]. Built around a recovering lower back:
   // no loaded twisting or bending forward, supported positions, core work that resists movement.
-  var APP_VERSION = "10";
+  var APP_VERSION = "11";
   var PLAN_VERSION = 2;
   var DEFAULT_PLAN = [
     { key: "push", name: "Push", day: 1, focus: "Chest, shoulders, triceps", ex: [
@@ -350,7 +360,7 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
   var view = { week: 0, day: 0, edit: false, section: "train", pweek: null, focus: false, fi: null, fiKey: null };
   try { view.focus = localStorage.getItem("split-log-focus") === "1"; } catch (e) {}
   try { if (localStorage.getItem("split-log-section") === "progress") view.section = "progress"; } catch (e) {}
-  var openCharts = {};
+  var openCharts = {}, openNotes = {};
 
   function load() {
     try {
@@ -951,8 +961,46 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
     cb.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M5 16l5-5 4 3 6-7"/></svg>Progress';
     var open = !!openCharts[ex.id];
     cb.setAttribute("aria-expanded", open ? "true" : "false");
-    if (!isTimed(ex)) meta.appendChild(cb);
+    var tools = el("div", "tools");
+    var nbtn = el("button", "chartbtn notesbtn" + (ex.setup ? " has" : "")); nbtn.type = "button";
+    nbtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>Notes';
+    nbtn.setAttribute("aria-expanded", openNotes[ex.id] ? "true" : "false");
+    tools.appendChild(nbtn);
+    if (!isTimed(ex)) tools.appendChild(cb);
+    meta.appendChild(tools);
     card.appendChild(meta);
+
+    // Machine and setup notes: kept on the exercise, so they show every week.
+    var notesHost = el("div");
+    function paintNotes() {
+      notesHost.textContent = "";
+      nbtn.setAttribute("aria-expanded", openNotes[ex.id] ? "true" : "false");
+      nbtn.classList.toggle("has", !!ex.setup);
+      if (openNotes[ex.id]) {
+        var box = el("div", "setupbox");
+        var lb = el("label", "setuplab", "Machine and setup notes"); lb.htmlFor = "setup-" + ex.id;
+        var ta = el("textarea"); ta.id = "setup-" + ex.id; ta.rows = 3; ta.value = ex.setup || "";
+        ta.placeholder = "e.g. Seat 4, back pad 2, handles in the middle. Pin 7 is 45 kg.";
+        ta.oninput = function () { ex.setup = ta.value; save(); nbtn.classList.toggle("has", !!ex.setup.trim()); };
+        var done = el("button", "setupdone", "Done"); done.type = "button";
+        done.onclick = function () { openNotes[ex.id] = false; paintNotes(); };
+        box.appendChild(lb); box.appendChild(ta); box.appendChild(done);
+        notesHost.appendChild(box);
+      } else if (ex.setup && ex.setup.trim()) {
+        var pv = el("button", "setupnote"); pv.type = "button";
+        pv.setAttribute("aria-label", "Edit setup notes: " + ex.setup);
+        pv.appendChild(el("span", "setupico", "Setup"));
+        pv.appendChild(el("span", "setuptxt", ex.setup.trim()));
+        pv.onclick = function () { openNotes[ex.id] = true; paintNotes(); };
+        notesHost.appendChild(pv);
+      }
+    }
+    nbtn.onclick = function () {
+      openNotes[ex.id] = !openNotes[ex.id]; paintNotes();
+      if (openNotes[ex.id]) { var t = notesHost.querySelector("textarea"); if (t) t.focus(); }
+    };
+    paintNotes();
+    card.appendChild(notesHost);
     var chartHost = el("div"); chartHost.hidden = !open;
     if (open) chartHost.appendChild(chartBlock(ex));
     cb.onclick = function () {
@@ -1321,9 +1369,18 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
       reg.update().catch(function () {});
       document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") reg.update().catch(function () {}); });
     }).catch(function () {});
+    // A new version only reloads the app when you're not mid-rest or typing, so nothing in progress is interrupted.
+    var wantReload = false;
+    function busy() {
+      var a = document.activeElement;
+      return !$("timer").hidden || (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA"));
+    }
+    function tryReload() { if (wantReload && !reloaded && !busy()) { reloaded = true; location.reload(); } }
     navigator.serviceWorker.addEventListener("controllerchange", function () {
-      if (hadController && !reloaded) { reloaded = true; location.reload(); }
+      if (!hadController) return;
+      wantReload = true; tryReload();
     });
+    setInterval(tryReload, 5000);
   }
 })();
 </script>
