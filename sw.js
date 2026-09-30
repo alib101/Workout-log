@@ -1,6 +1,8 @@
 // Offline cache. Bump VERSION (and APP_VERSION in index.html) on every change so phones pick up the new copy.
-var VERSION = "split-log-v11";
-var FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
+var VERSION = "split-log-v12";
+var FILES = ["./", "./index.html", "./css/app.css", "./js/logic.js", "./js/state.js", "./js/charts.js", "./js/train.js",
+  "./js/progress.js", "./js/setup.js", "./js/timer.js", "./js/backup.js", "./js/main.js",
+  "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(VERSION).then(function (c) {
