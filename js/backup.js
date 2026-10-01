@@ -18,13 +18,13 @@ $("menuBtn").onclick = function () {
   var m = $("menu"); m.hidden = !m.hidden; this.setAttribute("aria-expanded", String(!m.hidden)); msg.textContent = ""; paintBackup();
 };
 $("saveFileBtn").onclick = function () {
-  var name = "split-log-backup-" + stamp() + ".json";
+  var name = "split-log-backup.json"; // same name every time, so saving to the same folder replaces the last one
   var body = JSON.stringify({ app: "five-day-split", savedAt: new Date().toISOString(), data: state });
   var file = null;
   try { file = new File([body], name, { type: "application/json" }); } catch (e) {}
   if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
     navigator.share({ files: [file] }).then(function () {
-      setLastBackup(); msg.textContent = "Backup shared as " + name + ". If you chose Save to Files, it's in the folder you picked.";
+      setLastBackup(); msg.textContent = "Backup saved as " + name + ". If Files asked, choosing Replace swaps out your previous backup.";
     }, function (err) {
       msg.textContent = err && err.name === "AbortError" ? "No backup saved. Tap Save backup file and choose Save to Files." : "Couldn't open the share sheet. Try again, or use Copy backup as text under More options.";
     });
@@ -49,7 +49,7 @@ $("restoreFile").onchange = function () {
   var r = new FileReader();
   r.onload = function () {
     try { askRestore(parseBackup(String(r.result))); }
-    catch (e) { $("confirmBox").hidden = true; msg.textContent = "That file isn't a backup from this app. Pick a file named split-log-backup-….json."; }
+    catch (e) { $("confirmBox").hidden = true; msg.textContent = "That file isn't a backup from this app. Pick the file named split-log-backup.json."; }
   };
   r.onerror = function () { msg.textContent = "Couldn't read that file. Try picking it again."; };
   r.readAsText(f);
