@@ -34,6 +34,15 @@ function stepper(input, step, min, what) {
   var m = el("button", "nudge", "\u2212"); m.type = "button"; m.setAttribute("aria-label", "Less " + what);
   var pl = el("button", "nudge", "+"); pl.type = "button"; pl.setAttribute("aria-label", "More " + what);
   m.onclick = function () { nudge(-1); }; pl.onclick = function () { nudge(1); };
+  // Tapping the box always puts the cursor after the last digit, so backspace works straight away.
+  // Done just after the tap, because the browser places the cursor where you touched first.
+  function caretToEnd() {
+    if (document.activeElement !== input) return;
+    var n = input.value.length;
+    try { input.setSelectionRange(n, n); } catch (e) {}
+  }
+  input.addEventListener("focus", function () { setTimeout(caretToEnd, 0); });
+  input.addEventListener("click", function () { setTimeout(caretToEnd, 0); });
   wrap.appendChild(m); wrap.appendChild(input); wrap.appendChild(pl);
   return wrap;
 }
