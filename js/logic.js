@@ -3,8 +3,42 @@
 (function (root) {
   "use strict";
 
-  var WEEKS = ["Wk 1", "Wk 2", "Wk 3", "Wk 4", "Wk 5", "Wk 6", "Deload"];
-  var DELOAD = 6;
+  // Training is split into rounds: N training weeks then a deload. Week numbers run on across rounds
+  // (round 1 = weeks 0-6 by default), so logs keyed by week index never move when a round is added.
+  // WEEKS / SHORT are rebuilt in place by setRounds(), so other scripts holding a reference stay current.
+  var WEEKS = [], SHORT = [], ROUND_OF = [], DELOADS = {};
+  var DELOAD = 6; // first round's deload with the default length (kept for older code and tests)
+  var DEFAULT_ROUND = 6, MIN_ROUND = 1, MAX_ROUND = 16, MAX_ROUNDS = 30;
+  function cleanRounds(r) {
+    if (!Array.isArray(r) || !r.length) return [DEFAULT_ROUND];
+    var out = r.slice(0, MAX_ROUNDS).map(function (n) { n = parseInt(n, 10); return n >= MIN_ROUND && n <= MAX_ROUND ? n : DEFAULT_ROUND; });
+    return out;
+  }
+  function setRounds(rounds) {
+    rounds = cleanRounds(rounds);
+    WEEKS.length = 0; SHORT.length = 0; ROUND_OF.length = 0;
+    Object.keys(DELOADS).forEach(function (k) { delete DELOADS[k]; });
+    rounds.forEach(function (n, r) {
+      var pre = r ? "R" + (r + 1) + " " : "", start = WEEKS.length;
+      for (var i = 0; i <= n; i++) {
+        var dl = i === n;
+        WEEKS.push(pre + (dl ? "Deload" : "Wk " + (i + 1)));
+        SHORT.push(dl ? "Deload" : "Wk " + (i + 1));
+        ROUND_OF.push({ r: r, i: i, start: start, n: n, deload: dl });
+        if (dl) DELOADS[WEEKS.length - 1] = true;
+      }
+    });
+    return rounds;
+  }
+  setRounds([DEFAULT_ROUND]);
+  function isDeload(w) { return !!DELOADS[w]; }
+  // First week of round 2 onwards: coming back from a deload.
+  function isReturn(w) { var o = ROUND_OF[w]; return !!o && o.r > 0 && o.i === 0; }
+  // The training week to compare against: the one before, skipping deloads. -1 if none.
+  function prevWeek(w) { for (var k = w - 1; k >= 0; k--) if (!DELOADS[k]) return k; return -1; }
+  // How much of the reference week's weight to suggest: deload 60%, back from deload 90%.
+  function loadFactor(w) { return isDeload(w) ? 0.6 : isReturn(w) ? 0.9 : 1; }
+  function roundOf(w) { return ROUND_OF[w] || null; }
   var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var MAX_SESSIONS = 7;
 
@@ -24,7 +58,7 @@
   // Exercises measured in seconds, e.g. "30-45s /side".
   function isTimed(ex) { return /\d\s*s\b/i.test(String(ex.reps)); }
   function incOf(ex) { var n = parseFloat(ex.inc); return n > 0 ? n : 2.5; }
-  function targetSets(w, ex) { var n = Math.max(1, parseInt(ex.sets, 10) || 3); return w === DELOAD ? Math.ceil(n / 2) : n; }
+  function targetSets(w, ex) { var n = Math.max(1, parseInt(ex.sets, 10) || 3); return isDeload(w) ? Math.ceil(n / 2) : n; }
   function planTitle(n) {
     var words = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven"];
     return (words[n] || n) + "-Day Split";
@@ -110,6 +144,24 @@
     return { w: Math.floor(idx / D), di: idx % D };
   }
 
+  // ---------- rounds ----------
+  function weekHasLogs(state, w) {
+    var W = state.log[w];
+    if (W && Object.keys(W).some(function (id) { return (W[id] || []).some(function (x) { return x && (x[2] || x[0] !== "" || x[1] !== ""); }); })) return true;
+    return Object.keys(state.sessions || {}).some(function (k) { return +k.split("|")[0] === w; });
+  }
+  // Only the last round can change length (earlier ones would shift every later week's logs),
+  // and only while its deload is empty and no logged week would be cut off.
+  function canResizeLast(state, n) {
+    var rounds = cleanRounds(state.rounds), last = rounds.length - 1, start = 0;
+    for (var r = 0; r < last; r++) start += rounds[r] + 1;
+    if (n < MIN_ROUND || n > MAX_ROUND) return false;
+    var oldEnd = start + rounds[last];
+    if (weekHasLogs(state, oldEnd)) return false; // deload already started
+    for (var w = start + n; w < oldEnd; w++) if (weekHasLogs(state, w)) return false;
+    return true;
+  }
+
   // ---------- saved data ----------
   // Checks saved or restored data and fills in anything newer versions added. Returns null if it isn't ours.
   function normalizeState(st) {
@@ -121,6 +173,7 @@
       if (typeof d.name !== "string") d.name = "Day " + (i + 1);
     }
     ["pain", "sessions", "days", "setCounts"].forEach(function (k) { if (!st[k] || typeof st[k] !== "object") st[k] = {}; });
+    st.rounds = cleanRounds(st.rounds);
     return st;
   }
   function parseBackup(text) {
@@ -288,7 +341,9 @@
   }
 
   var Logic = {
-    WEEKS: WEEKS, DELOAD: DELOAD, DAYS: DAYS, MAX_SESSIONS: MAX_SESSIONS, MUSCLES: MUSCLES,
+    WEEKS: WEEKS, SHORT: SHORT, DELOAD: DELOAD, DEFAULT_ROUND: DEFAULT_ROUND, MIN_ROUND: MIN_ROUND, MAX_ROUND: MAX_ROUND, MAX_ROUNDS: MAX_ROUNDS,
+    setRounds: setRounds, isDeload: isDeload, isReturn: isReturn, prevWeek: prevWeek, loadFactor: loadFactor, roundOf: roundOf,
+    weekHasLogs: weekHasLogs, canResizeLast: canResizeLast, DAYS: DAYS, MAX_SESSIONS: MAX_SESSIONS, MUSCLES: MUSCLES,
     TEMPLATES: TEMPLATES, TEMPLATE_ORDER: TEMPLATE_ORDER,
     num: num, fmt: fmt, niceLabel: niceLabel, lowReps: lowReps, topReps: topReps, restSecs: restSecs,
     isTimed: isTimed, incOf: incOf, targetSets: targetSets, planTitle: planTitle,

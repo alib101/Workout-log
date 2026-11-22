@@ -46,8 +46,12 @@ function chartSvg(stats, key) {
       svg += '<text class="val" x="' + x + '" y="' + (y - 9) + '" text-anchor="middle">' + niceLabel(p.v) + '</text>';
     });
   }
+  // Labels per round: W1, W2 ... DL. With many weeks, only deloads and round starts are labelled.
+  var crowded = WEEKS.length > 10;
   WEEKS.forEach(function (lab, w) {
-    svg += '<text class="ax" x="' + xs(w).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + (w === DELOAD ? "DL" : "W" + (w + 1)) + '</text>';
+    var o = Logic.roundOf(w), txt = o.deload ? "DL" : (o.r && o.i === 0 ? "R" + (o.r + 1) : "W" + (o.i + 1));
+    if (crowded && !o.deload && o.i !== 0) return;
+    svg += '<text class="ax" x="' + xs(w).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + txt + '</text>';
   });
   return svg + '</svg>';
 }
@@ -70,7 +74,7 @@ function chartBlock(ex) {
   var first = null, last = null, bestTop = null;
   stats.forEach(function (s, w) {
     if (s.top != null && (bestTop == null || s.top > bestTop.top || (s.top === bestTop.top && s.topReps > bestTop.topReps))) bestTop = s;
-    if (w === DELOAD || s[chartMode] == null) return;
+    if (isDeload(w) || s[chartMode] == null) return;
     if (first == null) first = s[chartMode]; last = s[chartMode];
   });
   var cap = el("div", "chart-cap");

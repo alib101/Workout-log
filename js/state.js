@@ -2,10 +2,11 @@
    Scripts load in order (see index.html) and share one scope, so later files can use these names. */
 "use strict";
 
-var APP_VERSION = "14";
+var APP_VERSION = "15";
 var PLAN_VERSION = 2;
 
-var WEEKS = Logic.WEEKS, DELOAD = Logic.DELOAD, DAYS = Logic.DAYS;
+var WEEKS = Logic.WEEKS, SHORT = Logic.SHORT, DAYS = Logic.DAYS;
+var isDeload = Logic.isDeload, isReturn = Logic.isReturn, prevWeek = Logic.prevWeek, loadFactor = Logic.loadFactor;
 var KEY = "split-log-v2", VIEW_KEY = "split-log-view";
 
 // Pure helpers live in logic.js (tested). Short names kept so the screen code reads the same.
@@ -17,7 +18,7 @@ function uid() { return Math.random().toString(36).slice(2, 9); }
 // The back-friendly plan. Used for the one-off "Load new plan" upgrade from the very first version.
 function freshPlan() { return Logic.buildPlan("back5"); }
 function blankState(plan) {
-  return { plan: plan, log: {}, pain: {}, sessions: {}, days: {}, setCounts: {}, planVersion: PLAN_VERSION };
+  return { plan: plan, log: {}, pain: {}, sessions: {}, days: {}, setCounts: {}, rounds: [Logic.DEFAULT_ROUND], planVersion: PLAN_VERSION };
 }
 
 // state = { plan: [...sessions], log: { weekIndex: { exId: [[kg, reps, done], ...] } }, ... }
@@ -39,8 +40,11 @@ function load() {
     if (raw) { try { localStorage.setItem(KEY + "-unreadable-" + Date.now(), raw); } catch (e) {} }
     view.setup = true;
   }
+  syncRounds();
   var nx = upNext(); view.week = nx.w; view.day = Math.min(nx.di, state.plan.length - 1);
 }
+// Rebuild the week list from state.rounds. Call whenever state is replaced or rounds change.
+function syncRounds() { state.rounds = Logic.setRounds(state.rounds); }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
 function saveView() { try { localStorage.setItem(VIEW_KEY, JSON.stringify({ week: view.week, day: view.day })); } catch (e) {} }
 
@@ -67,6 +71,8 @@ function sets(w, id, n) {
 
 // Double progression (see logic.js): compares with last week's sets for this exercise.
 function progression(w, ex) {
-  if (w === 0 || w === DELOAD) return null;
-  return Logic.progression(peek(w - 1, ex.id), setCount(w - 1, ex), ex);
+  // No add-weight hint in a deload or the comeback week after one (that week starts at about 90%).
+  var pw = prevWeek(w);
+  if (pw < 0 || isDeload(w) || isReturn(w)) return null;
+  return Logic.progression(peek(pw, ex.id), setCount(pw, ex), ex);
 }

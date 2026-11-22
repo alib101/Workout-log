@@ -1,9 +1,10 @@
 /* Split Log: the Train screen (session tabs, exercise cards, focus mode, editing). */
 "use strict";
 
-// Most recent earlier week where this exercise has any numbers logged.
+// Most recent earlier training week (deloads skipped) where this exercise has any numbers logged.
 function lastLogged(w, id) {
   for (var k = w - 1; k >= 0; k--) {
+    if (isDeload(k)) continue;
     var p = peek(k, id);
     if (p) {
       var filled = p.filter(function (x) { return x[0] !== "" || x[1] !== ""; });
@@ -19,9 +20,10 @@ function dayKeyOf(ex) {
 }
 
 function holdRef(w, ex) {
-  if (w === 0) return "First week: hold as long as your form stays solid. Tap \u25B6 to time it.";
-  var bits = (peek(w - 1, ex.id) || []).filter(function (x) { return x[1] !== ""; }).map(function (x) { return x[1] + "s"; });
-  return bits.length ? WEEKS[w - 1] + ": " + bits.join("  ") : "Nothing logged for " + WEEKS[w - 1] + ".";
+  var pw = prevWeek(w);
+  if (pw < 0) return "First week: hold as long as your form stays solid. Tap \u25B6 to time it.";
+  var bits = (peek(pw, ex.id) || []).filter(function (x) { return x[1] !== ""; }).map(function (x) { return x[1] + "s"; });
+  return bits.length ? WEEKS[pw] + ": " + bits.join("  ") : "Nothing logged for " + WEEKS[pw] + ".";
 }
 // Number box with - and + either side. Starts from the grey suggestion if the box is empty.
 function stepper(input, step, min, what) {
@@ -68,22 +70,30 @@ function firstUnfinished(w, list) {
 }
 
 function prevSet(w, id, s) {
-  if (w === 0) return null;
-  var p = peek(w - 1, id);
+  var pw = prevWeek(w);
+  if (pw < 0) return null;
+  var p = peek(pw, id);
   if (!p) return null;
   var src = p[s] && (p[s][0] !== "" || p[s][1] !== "") ? p[s] : null;
   if (!src) for (var k = p.length - 1; k >= 0; k--) if (p[k][0] !== "") { src = p[k]; break; }
   if (!src) return null;
   var kg = src[0];
-  if (w === DELOAD && kg !== "" && !isNaN(parseFloat(kg))) kg = fmt(Math.round(parseFloat(kg) * 0.6 / 2.5) * 2.5);
+  kg = scaleKg(kg, w);
   return { kg: kg, reps: src[1] };
 }
+// Deload 60%, back from deload 90%, rounded to 2.5 kg. Other weeks unchanged.
+function scaleKg(kg, w) {
+  var f = loadFactor(w), k = parseFloat(kg);
+  if (f === 1 || kg === "" || isNaN(k)) return kg;
+  return fmt(Math.round(k * f / 2.5) * 2.5);
+}
 function refLine(w, id) {
-  if (w === 0) return "First week: pick weights that leave 1-2 reps in reserve.";
-  var bits = (peek(w - 1, id) || []).filter(function (s) { return s[0] !== "" || s[1] !== ""; })
+  var pw = prevWeek(w);
+  if (pw < 0) return "First week: pick weights that leave 1-2 reps in reserve.";
+  var bits = (peek(pw, id) || []).filter(function (s) { return s[0] !== "" || s[1] !== ""; })
     .map(function (s) { return (s[0] || "?") + "×" + (s[1] || "?"); });
-  if (!bits.length) return "Nothing logged for " + WEEKS[w - 1] + ".";
-  return WEEKS[w - 1] + (w === DELOAD ? " (deload is 60% of this): " : ": ") + bits.join("  ");
+  if (!bits.length) return "Nothing logged for " + WEEKS[pw] + ".";
+  return WEEKS[pw] + (isDeload(w) ? " (deload is 60% of this): " : isReturn(w) ? " (this week is about 90% of this): " : ": ") + bits.join("  ");
 }
 
 function totals(w, di) {
@@ -106,14 +116,75 @@ function updateProgress() {
 
 var TICK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
+// ---------- rounds: N training weeks + a deload, repeated ----------
+function roundStart(r) { var s = 0; for (var i = 0; i < r; i++) s += state.rounds[i] + 1; return s; }
+function goWeek(w) { view.week = Math.max(0, Math.min(w, WEEKS.length - 1)); saveView(); renderWeeks(); renderTabs(); renderMain(); }
+function roundHasLogs(r) {
+  var s = roundStart(r);
+  for (var w = s; w <= s + state.rounds[r]; w++) if (Logic.weekHasLogs(state, w)) return true;
+  return false;
+}
+function addRound() {
+  var r = state.rounds.length;
+  if (r >= Logic.MAX_ROUNDS) return;
+  roundMsg = "";
+  state.rounds.push(state.rounds[r - 1]); syncRounds(); save();
+  goWeek(roundStart(r)); window.scrollTo(0, 0);
+}
+var roundMsg = "";
+function resizeLast(d) {
+  var r = state.rounds.length - 1, n = state.rounds[r] + d;
+  if (!Logic.canResizeLast(state, n)) {
+    roundMsg = n < Logic.MIN_ROUND || n > Logic.MAX_ROUND ? "A round is " + Logic.MIN_ROUND + " to " + Logic.MAX_ROUND + " weeks."
+      : Logic.weekHasLogs(state, roundStart(r) + state.rounds[r]) ? "You've started this round's deload, so its length is fixed now."
+      : "Can't shorten: you've logged sets in the weeks that would go.";
+    renderWeeks(); return;
+  }
+  var wasDeload = isDeload(view.week);
+  state.rounds[r] = n; syncRounds(); save(); roundMsg = "";
+  if (wasDeload || view.week >= WEEKS.length) view.week = roundStart(r) + n;
+  goWeek(view.week);
+}
+function removeLastRound() {
+  var r = state.rounds.length - 1;
+  if (r < 1 || roundHasLogs(r)) return;
+  roundMsg = "";
+  state.rounds.pop(); syncRounds(); save(); goWeek(Math.min(view.week, WEEKS.length - 1));
+}
 function renderWeeks() {
+  var o = Logic.roundOf(view.week) || Logic.roundOf(0), R = state.rounds.length, last = o.r === R - 1;
+  var bar = $("roundbar"); bar.textContent = "";
+  var nav = el("div", "rnav");
+  var back = el("button", "wbtn", "\u2039"); back.type = "button"; back.disabled = o.r === 0; back.setAttribute("aria-label", "Previous round");
+  var fwd = el("button", "wbtn", "\u203A"); fwd.type = "button"; fwd.disabled = last; fwd.setAttribute("aria-label", "Next round");
+  back.onclick = function () { roundMsg = ""; goWeek(roundStart(o.r - 1)); };
+  fwd.onclick = function () { roundMsg = ""; goWeek(roundStart(o.r + 1)); };
+  nav.appendChild(back); nav.appendChild(el("b", "rname", "Round " + (o.r + 1) + (R > 1 ? " of " + R : ""))); nav.appendChild(fwd);
+  bar.appendChild(nav);
+  var acts = el("div", "racts");
+  if (last) {
+    var len = el("div", "rlen");
+    var m = el("button", "nudge", "\u2212"); m.type = "button"; m.setAttribute("aria-label", "One fewer training week");
+    var p = el("button", "nudge", "+"); p.type = "button"; p.setAttribute("aria-label", "One more training week");
+    m.onclick = function () { resizeLast(-1); }; p.onclick = function () { resizeLast(1); };
+    len.appendChild(m); len.appendChild(el("span", null, o.n + " wk + deload")); len.appendChild(p);
+    acts.appendChild(len);
+    if (R > 1 && !roundHasLogs(o.r)) {
+      var rm = el("button", "chip", "Remove"); rm.type = "button"; rm.onclick = removeLastRound; acts.appendChild(rm);
+    }
+    var add = el("button", "chip addround", "+ Round"); add.type = "button"; add.onclick = addRound;
+    acts.appendChild(add);
+  } else acts.appendChild(el("span", "rlen", o.n + " wk + deload"));
+  bar.appendChild(acts);
+  if (roundMsg) bar.appendChild(el("div", "rmsg", roundMsg));
+
   var box = $("weeks"); box.textContent = "";
-  WEEKS.forEach(function (label, w) {
-    var b = el("button", "chip", label); b.type = "button";
+  for (var w = o.start; w <= o.start + o.n; w++) (function (w) {
+    var b = el("button", "chip", SHORT[w]); b.type = "button";
     b.setAttribute("aria-pressed", w === view.week ? "true" : "false");
-    b.onclick = function () { view.week = w; saveView(); renderWeeks(); renderTabs(); renderMain(); };
+    b.onclick = function () { roundMsg = ""; goWeek(w); };
     box.appendChild(b);
-  });
+  })(w);
 }
 function renderTabs() {
   var box = $("tabs"), nx = upNext(); box.textContent = "";
@@ -176,7 +247,7 @@ function paintNav() {
   Array.prototype.forEach.call($("nav").children, function (b) { b.setAttribute("aria-pressed", b.dataset.s === view.section ? "true" : "false"); });
   var prog = view.section === "progress";
   $("nav").hidden = view.setup;
-  $("weeks").hidden = prog || view.setup; $("tabs").hidden = prog || view.setup;
+  $("weeks").hidden = prog || view.setup; $("roundbar").hidden = prog || view.setup; $("tabs").hidden = prog || view.setup;
   $("title").textContent = view.setup && !view.changing ? "Split Log" : Logic.planTitle(state.plan.length);
 }
 function renderMain() {
@@ -211,7 +282,9 @@ function renderMain() {
   if (view.edit) { renderEdit(main, d); return; }
   var nx = upNext();
   if (nx.finished && w === nx.w && view.day === nx.di) {
-    main.appendChild(el("div", "banner", "Block finished. Well done. Clear your logged sets under Backup > More options to start a new block, after saving a backup."));
+    var fin = el("div", "banner", "Round finished, deload done. Well done. Start the next round when you're ready: your exercises carry over and week 1 suggests about 90% of your pre-deload weights. ");
+    var nr = el("button", "primary", "Start round " + (state.rounds.length + 1)); nr.type = "button"; nr.onclick = addRound;
+    fin.appendChild(nr); main.appendChild(fin);
   } else if (!nx.finished && (nx.w !== w || nx.di !== view.day)) {
     var jump = el("button", "jump", "Up next: " + state.plan[nx.di].name + ", " + WEEKS[nx.w] + " \u2192"); jump.type = "button";
     jump.onclick = function () { view.week = nx.w; view.day = nx.di; renderWeeks(); renderTabs(); renderMain(); window.scrollTo(0, 0); };
@@ -222,7 +295,8 @@ function renderMain() {
     updateProgress();
     return;
   }
-  if (w === DELOAD) main.appendChild(el("div", "banner", "Deload week: about 60% of Wk 6 weight and half the sets. Grey numbers are suggestions."));
+  if (isDeload(w)) main.appendChild(el("div", "banner", "Deload week: about 60% of your last week's weight and half the sets. Grey numbers are suggestions."));
+  else if (isReturn(w)) main.appendChild(el("div", "banner", "Back from deload: start at about 90% of your weights from before the deload and stop 2-3 reps short of failure. Next week, go back to your old weights and progress as normal."));
   if (view.focus && d.ex.length) {
     var key = w + "|" + view.day;
     if (view.fiKey !== key || view.fi == null) { view.fiKey = key; view.fi = firstUnfinished(w, d.ex); }
@@ -333,7 +407,7 @@ function exCard(ex, w) {
   var last = lastLogged(w, ex.id);
   if (last) {
     var empty = data.slice(0, n).some(function (x) { return x[0] === "" && x[1] === ""; });
-    var rb = el("button", "repeatbtn", "Same as last time (" + WEEKS[last.w] + (w === DELOAD ? ", at 60%" : "") + ")"); rb.type = "button";
+    var rb = el("button", "repeatbtn", "Same as last time (" + WEEKS[last.w] + (isDeload(w) ? ", at 60%" : isReturn(w) ? ", at 90%" : "") + ")"); rb.type = "button";
     rb.disabled = !empty;
     if (!empty) rb.textContent = "All sets filled";
     rb.onclick = function () {
@@ -342,7 +416,7 @@ function exCard(ex, w) {
         if (!src) continue;
         if (data[i][0] === "" && src[0] !== "") {
           var k = num(src[0]);
-          data[i][0] = w === DELOAD && k != null ? fmt(Math.round(k * 0.6 / 2.5) * 2.5) : src[0];
+          data[i][0] = k != null ? scaleKg(src[0], w) : src[0];
         }
         if (data[i][1] === "" && src[1] !== "") data[i][1] = src[1];
       }

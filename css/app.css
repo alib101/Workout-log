@@ -255,3 +255,15 @@ footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surfac
 .setup-foot p { margin: 0; font-size: 14px; color: var(--muted); }
 .sessacts { margin-top: 6px; }
 footer:has(.timer[hidden]):has(.tabs[hidden]) { display: none; }
+
+/* Rounds: N weeks + deload, above the week chips */
+.roundbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.roundbar[hidden] { display: none; }
+.rnav, .racts, .rlen { display: flex; align-items: center; gap: 6px; }
+.racts { flex-wrap: wrap; justify-content: flex-end; }
+.racts .chip { padding: 6px 12px; }
+.rname { font-size: 15px; white-space: nowrap; }
+.rlen { font-size: 13px; color: var(--muted, #6b7280); white-space: nowrap; }
+.rlen .nudge { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.rmsg { flex-basis: 100%; font-size: 13px; color: var(--muted, #6b7280); }
+.banner .primary { display: block; margin-top: 10px; }

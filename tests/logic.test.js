@@ -126,3 +126,42 @@ test("plan titles", function () {
   assert.equal(L.planTitle(5), "Five-Day Split");
   assert.equal(L.planTitle(3), "Three-Day Split");
 });
+
+test("rounds: weeks run on across rounds, each ending in a deload", function () {
+  L.setRounds([6]);
+  assert.equal(L.WEEKS.length, 7); assert.equal(L.isDeload(6), true); assert.equal(L.WEEKS[6], "Deload");
+  L.setRounds([8, 5]);
+  assert.equal(L.WEEKS.length, 9 + 6);
+  assert.equal(L.isDeload(6), false, "round 1 extended: week index 6 is now Wk 7");
+  assert.equal(L.isDeload(8), true);
+  assert.equal(L.WEEKS[9], "R2 Wk 1"); assert.equal(L.SHORT[9], "Wk 1");
+  assert.equal(L.isReturn(9), true); assert.equal(L.isReturn(10), false);
+  assert.equal(L.prevWeek(9), 7, "comeback week compares with the last week before the deload");
+  assert.equal(L.prevWeek(8), 7);
+  assert.equal(L.loadFactor(8), 0.6); assert.equal(L.loadFactor(9), 0.9); assert.equal(L.loadFactor(10), 1);
+  assert.equal(L.targetSets(8, { sets: 4 }), 2); assert.equal(L.targetSets(6, { sets: 4 }), 4);
+  L.setRounds([6]);
+});
+
+test("rounds: only the last round resizes, and never over logged weeks", function () {
+  var plan = [{ key: "a", name: "A", ex: [{ id: "x" }] }];
+  var st = stateWith(plan, { 5: { x: [["50", "8", 1]] } });
+  assert.deepEqual(st.rounds, [6], "old saves get the default round");
+  assert.equal(L.canResizeLast(st, 9), true, "extend before the deload");
+  assert.equal(L.canResizeLast(st, 5), false, "week 6 has sets");
+  st.log[6] = { x: [["30", "8", 1]] };
+  assert.equal(L.canResizeLast(st, 9), false, "deload started");
+  st.rounds = [6, 6]; L.setRounds(st.rounds);
+  assert.equal(L.canResizeLast(st, 3), true);
+  L.setRounds([6]);
+});
+
+test("up next moves into a new round", function () {
+  var plan = [{ key: "a", name: "A", ex: [{ id: "x" }] }];
+  var st = stateWith(plan, { 6: { x: [["30", "8", 1]] } });
+  st.rounds = [6]; L.setRounds(st.rounds);
+  assert.equal(L.upNext(st, Date.now()).finished, true);
+  st.rounds = [6, 4]; L.setRounds(st.rounds);
+  assert.deepEqual(L.upNext(st, Date.now()), { w: 7, di: 0 });
+  L.setRounds([6]);
+});

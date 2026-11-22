@@ -74,7 +74,7 @@ function applyPlan(id) {
   } else {
     state = blankState(plan);
   }
-  save();
+  syncRounds(); save();
   view.setup = false; view.changing = false; setupPick = null; view.fi = null;
   view.week = 0; view.day = 0; view.section = "train";
   if (Logic.TEMPLATES[id].custom) view.edit = true;

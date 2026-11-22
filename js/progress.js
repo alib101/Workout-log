@@ -3,6 +3,12 @@
 
 // ---------- Progress section ----------
 function counted(x) { return x && (x[2] || (num(x[0]) != null && num(x[1]) != null)); }
+// "Week 3", "Deload week", or with rounds "Round 2 · Week 3".
+function weekTitle(w) {
+  var o = Logic.roundOf(w); if (!o) return "Week " + (w + 1);
+  var t = o.deload ? "Deload week" : "Week " + (o.i + 1);
+  return state.rounds.length > 1 ? "Round " + (o.r + 1) + " · " + t : t;
+}
 function weekTotals(w) {
   var t = { sessions: 0, sets: 0, vol: 0, muscles: {} };
   state.plan.forEach(function (d) {
@@ -66,7 +72,7 @@ function renderProgress(main) {
   var fwd = el("button", "wbtn", "›"); fwd.type = "button"; fwd.disabled = w === WEEKS.length - 1; fwd.setAttribute("aria-label", "Next week");
   back.onclick = function () { view.pweek--; renderMain(); };
   fwd.onclick = function () { view.pweek++; renderMain(); };
-  pick.appendChild(back); pick.appendChild(el("h2", null, w === DELOAD ? "Deload week" : "Week " + (w + 1))); pick.appendChild(fwd);
+  pick.appendChild(back); pick.appendChild(el("h2", null, weekTitle(w))); pick.appendChild(fwd);
   main.appendChild(pick);
 
   // Summary tiles
@@ -80,7 +86,7 @@ function renderProgress(main) {
     sum.appendChild(tile);
   });
   main.appendChild(sum);
-  if (!t.sets) main.appendChild(el("div", "banner", "Nothing logged for " + (w === DELOAD ? "the deload week" : "week " + (w + 1)) + " yet. Tick sets on the Train screen and they'll show here."));
+  if (!t.sets) main.appendChild(el("div", "banner", "Nothing logged for " + weekTitle(w).toLowerCase() + " yet. Tick sets on the Train screen and they'll show here."));
 
   // Sets per muscle group
   var mc = pcard("Sets per muscle group", "This week");

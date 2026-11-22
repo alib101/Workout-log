@@ -15,6 +15,7 @@ It works offline once it has been opened once.
 ## What it does
 
 - Log weight and reps for each set, with last week's numbers shown as suggestions.
+- Rounds: train for as many weeks as you like, then deload. Use **− / +** to change how many weeks the current round has before its deload, and **+ Round** to start the next one. The deload suggests about 60% weight and half the sets; the first week back suggests about 90% of your pre-deload weights.
 - Suggests when to add weight: once you hit the top of the rep range on every set.
 - Rest timer with a beep, and a hold timer for planks and other timed exercises.
 - Focus mode: one exercise at a time, moving on automatically.

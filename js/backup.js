@@ -56,7 +56,7 @@ $("restoreFile").onchange = function () {
 };
 $("confirmRestore").onclick = function () {
   if (!pendingRestore) return;
-  state = pendingRestore; pendingRestore = null; save();
+  state = pendingRestore; pendingRestore = null; syncRounds(); save();
   view.setup = false; view.changing = false; view.fi = null;
   var nx = upNext(); view.week = nx.w; view.day = Math.min(nx.di, state.plan.length - 1);
   $("confirmBox").hidden = true; renderWeeks(); renderTabs(); renderMain(); paintBackup();
@@ -77,8 +77,8 @@ $("restoreBtn").onclick = function () {
 $("resetBtn").onclick = function () {
   var b = this;
   if (!b.classList.contains("confirm")) { b.classList.add("confirm"); b.textContent = "Tap again to clear sets"; return; }
-  state.log = {}; save(); b.classList.remove("confirm"); b.textContent = "Clear all logged sets";
-  renderMain(); paintBackup(); msg.textContent = "Logged sets cleared. Your exercises are kept.";
+  state.log = {}; state.sessions = {}; state.setCounts = {}; state.rounds = [Logic.DEFAULT_ROUND]; syncRounds(); save(); b.classList.remove("confirm"); b.textContent = "Clear all logged sets";
+  view.week = 0; view.day = 0; renderWeeks(); renderTabs(); renderMain(); paintBackup(); msg.textContent = "Logged sets cleared. Your exercises are kept.";
 };
 $("changePlanBtn").onclick = function () {
   var b = this;
