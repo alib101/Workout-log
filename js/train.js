@@ -141,6 +141,7 @@ function resizeLast(d) {
     renderWeeks(); return;
   }
   var wasDeload = isDeload(view.week);
+  Logic.clearEmptyFrom(state, roundStart(r) + Math.min(n, state.rounds[r]));
   state.rounds[r] = n; syncRounds(); save(); roundMsg = "";
   if (wasDeload || view.week >= WEEKS.length) view.week = roundStart(r) + n;
   goWeek(view.week);
@@ -149,6 +150,7 @@ function removeLastRound() {
   var r = state.rounds.length - 1;
   if (r < 1 || roundHasLogs(r)) return;
   roundMsg = "";
+  Logic.clearEmptyFrom(state, roundStart(r));
   state.rounds.pop(); syncRounds(); save(); goWeek(Math.min(view.week, WEEKS.length - 1));
 }
 function renderWeeks() {

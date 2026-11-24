@@ -149,6 +149,10 @@ test("rounds: only the last round resizes, and never over logged weeks", functio
   assert.deepEqual(st.rounds, [6], "old saves get the default round");
   assert.equal(L.canResizeLast(st, 9), true, "extend before the deload");
   assert.equal(L.canResizeLast(st, 5), false, "week 6 has sets");
+  st.sessions["6|a"] = 123; st.log[6] = { x: [["", "", 0]] };
+  assert.equal(L.canResizeLast(st, 9), true, "ticked then cleared: leftover timestamp doesn't block");
+  L.clearEmptyFrom(st, 6);
+  assert.equal(st.sessions["6|a"], undefined); assert.equal(st.log[6], undefined);
   st.log[6] = { x: [["30", "8", 1]] };
   assert.equal(L.canResizeLast(st, 9), false, "deload started");
   st.rounds = [6, 6]; L.setRounds(st.rounds);

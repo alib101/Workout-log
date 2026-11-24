@@ -1,5 +1,5 @@
 // Offline cache. Bump VERSION (and APP_VERSION in index.html) on every change so phones pick up the new copy.
-var VERSION = "split-log-v15";
+var VERSION = "split-log-v16";
 var FILES = ["./", "./index.html", "./css/app.css", "./js/logic.js", "./js/state.js", "./js/charts.js", "./js/train.js",
   "./js/progress.js", "./js/setup.js", "./js/timer.js", "./js/backup.js", "./js/main.js",
   "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];

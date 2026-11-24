@@ -2,7 +2,7 @@
    Scripts load in order (see index.html) and share one scope, so later files can use these names. */
 "use strict";
 
-var APP_VERSION = "15";
+var APP_VERSION = "16";
 var PLAN_VERSION = 2;
 
 var WEEKS = Logic.WEEKS, SHORT = Logic.SHORT, DAYS = Logic.DAYS;

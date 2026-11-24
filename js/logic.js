@@ -147,8 +147,19 @@
   // ---------- rounds ----------
   function weekHasLogs(state, w) {
     var W = state.log[w];
-    if (W && Object.keys(W).some(function (id) { return (W[id] || []).some(function (x) { return x && (x[2] || x[0] !== "" || x[1] !== ""); }); })) return true;
-    return Object.keys(state.sessions || {}).some(function (k) { return +k.split("|")[0] === w; });
+    // Only real numbers or ticks count. A leftover session timestamp (sets ticked then cleared) doesn't.
+    return !!(W && Object.keys(W).some(function (id) { return (W[id] || []).some(function (x) { return x && (x[2] || x[0] !== "" || x[1] !== ""); }); }));
+  }
+  // Drop leftovers (session times, set counts, blank rows) for weeks with nothing logged from week `from` on,
+  // so a resized round doesn't inherit them under a different week number.
+  function clearEmptyFrom(state, from) {
+    ["sessions", "setCounts"].forEach(function (k) {
+      Object.keys(state[k] || {}).forEach(function (key) {
+        var w = +key.split("|")[0];
+        if (w >= from && !weekHasLogs(state, w)) delete state[k][key];
+      });
+    });
+    Object.keys(state.log || {}).forEach(function (w) { if (+w >= from && !weekHasLogs(state, +w)) delete state.log[w]; });
   }
   // Only the last round can change length (earlier ones would shift every later week's logs),
   // and only while its deload is empty and no logged week would be cut off.
@@ -343,7 +354,7 @@
   var Logic = {
     WEEKS: WEEKS, SHORT: SHORT, DELOAD: DELOAD, DEFAULT_ROUND: DEFAULT_ROUND, MIN_ROUND: MIN_ROUND, MAX_ROUND: MAX_ROUND, MAX_ROUNDS: MAX_ROUNDS,
     setRounds: setRounds, isDeload: isDeload, isReturn: isReturn, prevWeek: prevWeek, loadFactor: loadFactor, roundOf: roundOf,
-    weekHasLogs: weekHasLogs, canResizeLast: canResizeLast, DAYS: DAYS, MAX_SESSIONS: MAX_SESSIONS, MUSCLES: MUSCLES,
+    weekHasLogs: weekHasLogs, canResizeLast: canResizeLast, clearEmptyFrom: clearEmptyFrom, DAYS: DAYS, MAX_SESSIONS: MAX_SESSIONS, MUSCLES: MUSCLES,
     TEMPLATES: TEMPLATES, TEMPLATE_ORDER: TEMPLATE_ORDER,
     num: num, fmt: fmt, niceLabel: niceLabel, lowReps: lowReps, topReps: topReps, restSecs: restSecs,
     isTimed: isTimed, incOf: incOf, targetSets: targetSets, planTitle: planTitle,
